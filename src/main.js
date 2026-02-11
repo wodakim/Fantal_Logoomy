@@ -60,7 +60,7 @@ const actionSystem = new ActionSystem(chunk, em, combatResolver);
 const aiSystem = {
     executeTurn: (unitId) => {
         console.log(`AI (Unit ${unitId}) Thinking...`);
-        const targetId = 0; // Hero
+        const targetId = 0;
         const tx = COMPONENT_TRANSFORM.x[targetId];
         const ty = COMPONENT_TRANSFORM.y[targetId];
 
@@ -86,17 +86,21 @@ turnManager.onTurnStart = (unitId) => {
     else aiSystem.executeTurn(unitId);
 };
 
+// State Machine
 let gameState = 'IDLE';
 let highlightedTiles = [];
+let cursor = null; // {x, y} for manual selection
 
 ui.onMoveClicked = (unitId) => {
     gameState = 'MOVE_SELECTION';
     highlightedTiles = actionSystem.getMovementRange(unitId);
+    cursor = null;
 };
 
 ui.onAttackClicked = (unitId) => {
     gameState = 'ATTACK_SELECTION';
     highlightedTiles = actionSystem.getAttackRange(unitId, 1);
+    cursor = null;
 };
 
 ui.onWaitClicked = (unitId) => {
@@ -110,24 +114,44 @@ input.onPan = (dx, dy) => {
     renderer.camY += dy;
 };
 
+// Handle Selection Logic with Cursor Confirmation
 input.onTap = (pos) => {
-    // Pos is now Height-Corrected thanks to pickTile
     const activeUnit = turnManager.activeUnit;
 
-    console.log("Tap on Tile:", pos);
+    // Valid Tile Check helper
+    const isValid = highlightedTiles.some(t => t.x === pos.x && t.y === pos.y);
 
     if (gameState === 'MOVE_SELECTION') {
-        const isValid = highlightedTiles.some(t => t.x === pos.x && t.y === pos.y);
-        if (isValid) {
+        if (!isValid) {
+            cursor = null;
+            return;
+        }
+
+        // Logic: Click 1 -> Move Cursor. Click 2 on same tile -> Confirm.
+        if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
+            cursor = { x: pos.x, y: pos.y };
+            console.log("Cursor moved to:", cursor);
+        } else {
+            // Confirm Move
             actionSystem.moveUnit(activeUnit, pos.x, pos.y);
             gameState = 'IDLE';
             highlightedTiles = [];
+            cursor = null;
             ui.showActionMenu(activeUnit);
         }
     }
     else if (gameState === 'ATTACK_SELECTION') {
-        const isValid = highlightedTiles.some(t => t.x === pos.x && t.y === pos.y);
-        if (isValid) {
+        if (!isValid) {
+            cursor = null;
+            return;
+        }
+
+        if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
+            cursor = { x: pos.x, y: pos.y };
+            // Optional: Highlight entity if present?
+        } else {
+            // Confirm Attack
+            // Find Target
             let targetId = -1;
             const maxUnits = em.activeMap.length;
             for(let id=0; id<maxUnits; id++) {
@@ -145,7 +169,11 @@ input.onTap = (pos) => {
 
                 gameState = 'IDLE';
                 highlightedTiles = [];
+                cursor = null;
                 turnManager.endTurn(activeUnit);
+            } else {
+                console.log("No valid target confirmed.");
+                // Maybe allow attacking empty air? In FFT yes, here maybe not yet.
             }
         }
     }
@@ -160,9 +188,15 @@ const loop = new GameLoop(
         renderer.clear();
         renderer.render(chunk, em);
 
+        // Draw Highlights
         if (highlightedTiles.length > 0) {
             const color = (gameState === 'ATTACK_SELECTION') ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 100, 255, 0.4)';
             renderer.drawHighlight(chunk, highlightedTiles, color);
+        }
+
+        // Draw Cursor
+        if (cursor) {
+            renderer.drawHighlight(chunk, [cursor], 'rgba(255, 255, 0, 0.6)'); // Yellow
         }
     }
 );
