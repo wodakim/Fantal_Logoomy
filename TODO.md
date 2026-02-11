@@ -35,7 +35,7 @@ Legende :
 *   🟩 **4.1. Pathfinding (A*) & FloodFill**
 *   🔺 **4.2. Géométrie de Ciblage**
 *   🟩 **4.3. Séquence de Résolution**
-    *   Death & Corpse Handling integrated.
+    *   Win/Loss Conditions integrated.
 *   🔺 **4.4. Système de Réaction**
 *   🟩 **4.5. Interface de Combat (Mobile)**
 
@@ -46,6 +46,6 @@ Legende :
 *   🟩 **6.1 - 6.7** (Système d'IA)
 
 ## Module 7: Economy & Meta
-*   🟡 **7.1 - 7.6** (Loot System started)
-    *   Implemented Loot Drops & Collection.
-    *   No persistent Inventory UI yet.
+*   🟩 **7.1 - 7.6** (Persistence & Loop)
+    *   `SaveSystem` persists Hero Stats.
+    *   Battle Loop (Next Battle) functional.

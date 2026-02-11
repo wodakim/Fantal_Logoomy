@@ -5,21 +5,29 @@ import { PROP_LOOT_BAG, STATUS_DEAD } from '../core/Constants.js';
 export class TurnManager {
     constructor(entityManager, chunk) {
         this.em = entityManager;
-        this.chunk = chunk; // Need chunk to update props
+        this.chunk = chunk;
         this.activeUnit = null;
         this.paused = false;
         this.onTurnStart = null;
+        this.onBattleEnd = null; // Callback for Victory/Defeat
 
-        this.corpses = []; // {x, y, timer}
+        this.corpses = [];
     }
 
     registerCorpse(x, y, timer) {
         this.corpses.push({ x, y, timer });
-        console.log("Corpse registered at", x, y);
     }
 
     tick() {
-        if (this.activeUnit !== null) return;
+        if (this.activeUnit !== null || this.paused) return;
+
+        // Check Win Condition
+        const result = this.checkWinCondition();
+        if (result) {
+            this.paused = true;
+            if (this.onBattleEnd) this.onBattleEnd(result);
+            return;
+        }
 
         const stats = COMPONENT_STATS;
         const status = COMPONENT_STATUS;
@@ -29,8 +37,6 @@ export class TurnManager {
 
         for (let id = 0; id < maxUnits; id++) {
             if (this.em.activeMap[id] === 0) continue;
-
-            // Skip Dead Units
             if ((status.flags[id] & STATUS_DEAD) !== 0) continue;
 
             let spd = stats.speed[id];
@@ -54,19 +60,35 @@ export class TurnManager {
         }
     }
 
+    checkWinCondition() {
+        // Hero is ID 0
+        // Enemies are ID > 0
+        const status = COMPONENT_STATUS;
+        const maxUnits = this.em.activeMap.length;
+
+        let heroAlive = false;
+        let enemiesAlive = 0;
+
+        // Check Hero (ID 0)
+        if (this.em.activeMap[0] === 1 && (status.flags[0] & STATUS_DEAD) === 0) {
+            heroAlive = true;
+        }
+
+        // Check Enemies
+        for (let id = 1; id < maxUnits; id++) {
+            if (this.em.activeMap[id] === 1 && (status.flags[id] & STATUS_DEAD) === 0) {
+                enemiesAlive++;
+            }
+        }
+
+        if (!heroAlive) return "DEFEAT";
+        if (enemiesAlive === 0) return "VICTORY";
+
+        return null; // Battle continues
+    }
+
     startTurn(unitId) {
         this.activeUnit = unitId;
-        console.log(`Unit ${unitId} Turn Start!`);
-
-        // Tick Corpses
-        // (Usually happens at Global Tick or Round start, but here per turn is fine for "Tick-based decay")
-        // Actually FFT corpses decay on their own CT? Simplified: Decay every unit turn? Too fast.
-        // Decay every "Round"? Hard to define in CT system.
-        // Let's Decay every time CT accumulator loops?
-        // Simplest: Decay when the Unit who died WOULD have had a turn?
-        // Or just flat decay for now every time any turn starts (Fast decay).
-        // Let's do: Decay 1 tick every turn. 3 turns = very fast.
-        // Let's set timer to 10 turns.
 
         this.corpses.forEach(c => {
             if (c.timer > 0) c.timer--;
@@ -80,7 +102,6 @@ export class TurnManager {
     }
 
     transformCorpseToLoot(x, y) {
-        console.log("Corpse decayed to Loot at", x, y);
         const idx = this.chunk.getIndex(x, y);
         this.chunk.objIndex[idx] = PROP_LOOT_BAG;
     }
