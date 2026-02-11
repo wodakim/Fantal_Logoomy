@@ -122,18 +122,40 @@ export class Renderer {
 
     drawProp(sx, sy, type) {
         const ctx = this.ctx;
-        // Simple visual placeholder for props
-        // Rock = Dark Grey, Tree/Bone = Light Grey
-        ctx.fillStyle = (type === 1) ? '#444' : '#ccc';
-
-        // Draw a smaller block or shape
         const w = TILE_W / 2;
-        const h = TILE_H;
-        const ox = sx + (TILE_W - w)/2 - 16; // Center horizontally roughly
-        const oy = sy - h/2; // Shift up
+        const h = TILE_H * 1.5;
+        const ox = sx; // Top point of tile
+        const oy = sy;
 
-        // Draw a "Pillar"
-        ctx.fillRect(sx - w/4, sy - h/2, w/2, h);
+        // Center the prop base on the tile top
+        // Tile Top Center is (sx, sy + TILE_H/2) if diamond starts at sx,sy?
+        // isoToScreen returns Top Corner.
+        // Center is + TILE_W/2? No.
+        // x: (x-y)*W/2.
+        // If x=0, y=0 -> 0.
+        // It returns the "Top Corner" of the diamond.
+        // The "Center" of the diamond is (x, y + H/2).
+
+        const cx = sx;
+        const cy = sy + TILE_H / 2;
+
+        if (type === 1) {
+            // Rock (Dark Grey Block)
+            ctx.fillStyle = '#555';
+            ctx.fillRect(cx - 10, cy - 20, 20, 20);
+            ctx.strokeStyle = '#333';
+            ctx.strokeRect(cx - 10, cy - 20, 20, 20);
+        } else if (type === 2) {
+            // Tree/Pillar (Brown Trunk + Green Top)
+            // Trunk
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(cx - 6, cy - 30, 12, 30);
+            // Foliage
+            ctx.fillStyle = '#2e7d32';
+            ctx.beginPath();
+            ctx.arc(cx, cy - 35, 15, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     drawEntity(sx, sy, spriteId) {
