@@ -6,17 +6,19 @@ export class CombatOverlay {
 
         // Listen to Turn Manager
         this.tm.onTurnStart = (unitId) => this.showActionMenu(unitId);
+
+        // Callbacks to be set by Main
+        this.onMoveClicked = null;
+        this.onActClicked = null; // General Act menu
+        this.onAttackClicked = null; // Specific Attack action
+        this.onWaitClicked = null;
     }
 
     showActionMenu(unitId) {
-        // Clear existing
         if (this.menu) this.menu.remove();
 
-        // Create Glass Panel
         this.menu = document.createElement('div');
         this.menu.className = 'action-menu glass-panel ui-interactive';
-
-        // Style (should be in CSS, but inline for safety here)
         Object.assign(this.menu.style, {
             position: 'absolute',
             bottom: '20px',
@@ -27,27 +29,42 @@ export class CombatOverlay {
             gap: '10px'
         });
 
-        // Title
         const title = document.createElement('div');
-        title.innerText = `Unit ${unitId} Active`;
-        title.style.color = '#c5a059'; // Gold
-        title.style.marginBottom = '5px';
+        title.innerText = `Unit ${unitId}`;
+        title.style.color = '#c5a059';
         this.menu.appendChild(title);
 
-        // Buttons
-        this.createButton('MOVE', () => this.onMoveClicked(unitId));
-        this.createButton('ACT', () => this.onActClicked(unitId));
-        this.createButton('WAIT', () => this.onWaitClicked(unitId));
+        this.createButton('MOVE', () => this.onMoveClicked && this.onMoveClicked(unitId));
+        this.createButton('ACT', () => this.showActSubMenu(unitId));
+        this.createButton('WAIT', () => this.onWaitClicked && this.onWaitClicked(unitId));
 
         this.root.appendChild(this.menu);
+    }
+
+    showActSubMenu(unitId) {
+        // Clear buttons, show skills
+        // Simplified: Just show "ATTACK"
+        this.menu.innerHTML = '';
+
+        const title = document.createElement('div');
+        title.innerText = `Actions`;
+        title.style.color = '#c5a059';
+        this.menu.appendChild(title);
+
+        this.createButton('ATTACK', () => {
+             // Close menu to allow selection
+             this.menu.remove();
+             this.menu = null;
+             if (this.onAttackClicked) this.onAttackClicked(unitId);
+        });
+
+        this.createButton('BACK', () => this.showActionMenu(unitId));
     }
 
     createButton(text, callback) {
         const btn = document.createElement('button');
         btn.innerText = text;
-        btn.className = 'ui-interactive'; // Allow clicks
-
-        // Mobile friendly style
+        btn.className = 'ui-interactive';
         Object.assign(btn.style, {
             padding: '12px 24px',
             background: 'rgba(50, 0, 0, 0.9)',
@@ -57,29 +74,33 @@ export class CombatOverlay {
             fontFamily: 'monospace',
             cursor: 'pointer'
         });
-
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            callback();
-        });
-        btn.addEventListener('click', (e) => callback()); // Fallback
-
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); callback(); });
+        btn.addEventListener('click', (e) => callback());
         this.menu.appendChild(btn);
     }
 
-    onMoveClicked(unitId) {
-        console.log("Move clicked for", unitId);
-        // Trigger move state in InputSystem?
-    }
+    showFloatingText(x, y, text, color = 'white') {
+        const el = document.createElement('div');
+        el.innerText = text;
+        Object.assign(el.style, {
+            position: 'absolute',
+            left: `${x}px`,
+            top: `${y}px`,
+            color: color,
+            fontSize: '20px',
+            fontWeight: 'bold',
+            pointerEvents: 'none',
+            textShadow: '1px 1px 0 #000',
+            transition: 'top 1s, opacity 1s'
+        });
+        this.root.appendChild(el);
 
-    onActClicked(unitId) {
-        console.log("Act clicked for", unitId);
-    }
+        // Animate
+        requestAnimationFrame(() => {
+            el.style.top = `${y - 50}px`;
+            el.style.opacity = '0';
+        });
 
-    onWaitClicked(unitId) {
-        console.log("Wait clicked for", unitId);
-        this.menu.remove();
-        this.menu = null;
-        this.tm.endTurn(unitId);
+        setTimeout(() => el.remove(), 1000);
     }
 }

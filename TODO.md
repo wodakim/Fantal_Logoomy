@@ -10,7 +10,6 @@ Legende :
 *   🟩 **1.2. Mathématiques de Projection Isométrique**
 *   🟩 **1.3. Structure de Données (Chunk System)**
 *   🟩 **1.4. Algorithme de Rendu**
-    *   Updated with Entity Z-Sorting.
 *   🟩 **1.5. Le Moteur Temporel (Clocktick)**
 *   🟩 **1.6. The Fluid Engine (Phase 1.5)**
 *   🔺 **1.7. Système de "Juice" & Caméra**
@@ -34,18 +33,21 @@ Legende :
 
 ## Module 4: Combat Engine
 *   🟩 **4.1. Pathfinding (A*) & FloodFill**
-    *   `ActionSystem.getMovementRange` implémenté.
 *   🔺 **4.2. Géométrie de Ciblage**
-*   🟡 **4.3. Séquence de Résolution**
+*   🟩 **4.3. Séquence de Résolution**
+    *   `CombatResolver` integrated.
+    *   Attack Action functional.
 *   🔺 **4.4. Système de Réaction**
 *   🟩 **4.5. Interface de Combat (Mobile)**
-    *   Move Interaction wired.
+    *   Full Loop: Move -> Act -> Attack -> End.
+    *   Floating Damage Text.
 
 ## Module 5: Job System
 *   🔺 **5.1 - 5.7** (Tout le système de classes et compétences)
 
 ## Module 6: AI
-*   🔺 **6.1 - 6.7** (Tout le système d'IA)
+*   🟡 **6.1 - 6.7** (Tout le système d'IA)
+    *   AI Stub implemented (Move & Attack logic present).
 
 ## Module 7: Economy & Meta
 *   🔺 **7.1 - 7.6** (Tout le système de loot et sauvegarde)
