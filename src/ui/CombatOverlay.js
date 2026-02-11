@@ -4,14 +4,14 @@ export class CombatOverlay {
         this.root = document.getElementById('ui-layer');
         this.menu = null;
 
-        // Listen to Turn Manager
         this.tm.onTurnStart = (unitId) => this.showActionMenu(unitId);
 
-        // Callbacks to be set by Main
         this.onMoveClicked = null;
-        this.onActClicked = null; // General Act menu
-        this.onAttackClicked = null; // Specific Attack action
+        this.onAttackClicked = null; // Standard Attack
+        this.onSkillClicked = null;  // New: Skill selected
         this.onWaitClicked = null;
+
+        this.skillSystem = null; // To be linked
     }
 
     showActionMenu(unitId) {
@@ -42,8 +42,6 @@ export class CombatOverlay {
     }
 
     showActSubMenu(unitId) {
-        // Clear buttons, show skills
-        // Simplified: Just show "ATTACK"
         this.menu.innerHTML = '';
 
         const title = document.createElement('div');
@@ -51,12 +49,24 @@ export class CombatOverlay {
         title.style.color = '#c5a059';
         this.menu.appendChild(title);
 
+        // Standard Attack
         this.createButton('ATTACK', () => {
-             // Close menu to allow selection
              this.menu.remove();
              this.menu = null;
              if (this.onAttackClicked) this.onAttackClicked(unitId);
         });
+
+        // Job Skills
+        if (this.skillSystem) {
+            const skills = this.skillSystem.getUnitSkills(unitId);
+            skills.forEach(skill => {
+                this.createButton(skill.name.toUpperCase(), () => {
+                    this.menu.remove();
+                    this.menu = null;
+                    if (this.onSkillClicked) this.onSkillClicked(unitId, skill);
+                });
+            });
+        }
 
         this.createButton('BACK', () => this.showActionMenu(unitId));
     }
@@ -91,11 +101,11 @@ export class CombatOverlay {
             fontWeight: 'bold',
             pointerEvents: 'none',
             textShadow: '1px 1px 0 #000',
-            transition: 'top 1s, opacity 1s'
+            transition: 'top 1s, opacity 1s',
+            zIndex: 100
         });
         this.root.appendChild(el);
 
-        // Animate
         requestAnimationFrame(() => {
             el.style.top = `${y - 50}px`;
             el.style.opacity = '0';

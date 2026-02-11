@@ -10,7 +10,6 @@ Legende :
 *   🟩 **1.2. Mathématiques de Projection Isométrique**
 *   🟩 **1.3. Structure de Données (Chunk System)**
 *   🟩 **1.4. Algorithme de Rendu**
-    *   Updated with Entity Z-Sorting & Prop Rendering.
 *   🟩 **1.5. Le Moteur Temporel (Clocktick)**
 *   🟩 **1.6. The Fluid Engine (Phase 1.5)**
 *   🔺 **1.7. Système de "Juice" & Caméra**
@@ -21,7 +20,6 @@ Legende :
 *   🔺 **2.3. Connectivité & Validation**
 *   🔺 **2.4. Placement POI**
 *   🟩 **2.5. Props Dynamiques**
-    *   Implemented Rocks/Pillars generation & rendering.
 *   🟩 **2.6. Procedural Asset Generation**
 *   🔺 **2.7. Biomes Spécifiques**
 
@@ -39,13 +37,15 @@ Legende :
 *   🟩 **4.3. Séquence de Résolution**
 *   🔺 **4.4. Système de Réaction**
 *   🟩 **4.5. Interface de Combat (Mobile)**
-    *   Implemented Double Tap Confirmation.
 
 ## Module 5: Job System
-*   🔺 **5.1 - 5.7** (Tout le système de classes et compétences)
+*   🟩 **5.1 - 5.7** (Système de base implémenté)
+    *   `SkillSystem.js` gère les compétences.
+    *   Menu dynamique dans `CombatOverlay`.
 
 ## Module 6: AI
-*   🟡 **6.1 - 6.7** (Tout le système d'IA)
+*   🟩 **6.1 - 6.7** (Système d'IA)
+    *   IA utilise maintenant le Pathfinding pour contourner les Props.
 
 ## Module 7: Economy & Meta
 *   🔺 **7.1 - 7.6** (Tout le système de loot et sauvegarde)

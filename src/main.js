@@ -12,6 +12,8 @@ import { COMPONENT_SPRITE, SPRITE_CACHE } from './entities/components/Sprite.js'
 import { SpriteGenerator } from './assets/SpriteGenerator.js';
 import { ActionSystem } from './logic/ActionSystem.js';
 import { CombatResolver } from './logic/CombatResolver.js';
+import { SkillSystem } from './logic/SkillSystem.js';
+import { Pathfinding } from './logic/Pathfinding.js';
 import { isoToScreen } from './math/Isometric.js';
 
 console.log("Initializing VERMILION...");
@@ -50,12 +52,17 @@ spriteGen.generateSprite(666, { color: '#e74c3c' }).then(bmp => SPRITE_CACHE[1] 
 
 // Systems
 const input = new InputSystem(renderer);
-input.currentChunk = chunk; // Link chunk for height-aware picking
+input.currentChunk = chunk;
 
 const turnManager = new TurnManager(em);
 const ui = new CombatOverlay(turnManager);
 const combatResolver = new CombatResolver();
 const actionSystem = new ActionSystem(chunk, em, combatResolver);
+const skillSystem = new SkillSystem(actionSystem);
+skillSystem.loadDefinitions(); // Async but fast enough for local mock
+ui.skillSystem = skillSystem;
+
+const pathfinder = new Pathfinding(chunk);
 
 const aiSystem = {
     executeTurn: (unitId) => {
@@ -63,16 +70,30 @@ const aiSystem = {
         const targetId = 0;
         const tx = COMPONENT_TRANSFORM.x[targetId];
         const ty = COMPONENT_TRANSFORM.y[targetId];
+        const ux = COMPONENT_TRANSFORM.x[unitId];
+        const uy = COMPONENT_TRANSFORM.y[unitId];
 
-        let moveX = tx + 1;
-        let moveY = ty;
+        // Find path to target
+        // We want to be adjacent (Range 1)
+        // Find path to target, then pop last node? Or path to adjacent tile?
+        // Simple heuristic: Path to Target. If path length > 1, move to index [length-2].
+        const path = pathfinder.findPath(ux, uy, tx, ty, 2);
 
-        if (moveX < chunk.size) {
-            actionSystem.moveUnit(unitId, moveX, moveY);
+        // If path exists and length > 1 (Target is not self)
+        if (path && path.length > 1) {
+            // Target is occupied by Hero, so Pathfinding might actually return empty if we treat units as obstacles?
+            // Current Pathfinding only checks Props.
+            // So it will return path TO the hero.
+            // We want to stop 1 step before.
+            const dest = path[path.length - 2]; // One step before target
+
+            // Move there
+            // Simulate "Walking" (Teleport for now)
+            actionSystem.moveUnit(unitId, dest.x, dest.y);
         }
 
+        // Attack
         const dmg = actionSystem.performAttack(unitId, targetId);
-
         const h = chunk.heightMap[chunk.getIndex(tx, ty)];
         const scr = isoToScreen(tx, ty, h, renderer.camX, renderer.camY);
         ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
@@ -89,7 +110,8 @@ turnManager.onTurnStart = (unitId) => {
 // State Machine
 let gameState = 'IDLE';
 let highlightedTiles = [];
-let cursor = null; // {x, y} for manual selection
+let cursor = null;
+let activeSkill = null;
 
 ui.onMoveClicked = (unitId) => {
     gameState = 'MOVE_SELECTION';
@@ -101,6 +123,14 @@ ui.onAttackClicked = (unitId) => {
     gameState = 'ATTACK_SELECTION';
     highlightedTiles = actionSystem.getAttackRange(unitId, 1);
     cursor = null;
+    activeSkill = null;
+};
+
+ui.onSkillClicked = (unitId, skill) => {
+    gameState = 'ATTACK_SELECTION'; // Reuse attack logic for now
+    highlightedTiles = actionSystem.getAttackRange(unitId, skill.range);
+    cursor = null;
+    activeSkill = skill;
 };
 
 ui.onWaitClicked = (unitId) => {
@@ -114,25 +144,15 @@ input.onPan = (dx, dy) => {
     renderer.camY += dy;
 };
 
-// Handle Selection Logic with Cursor Confirmation
 input.onTap = (pos) => {
     const activeUnit = turnManager.activeUnit;
-
-    // Valid Tile Check helper
     const isValid = highlightedTiles.some(t => t.x === pos.x && t.y === pos.y);
 
     if (gameState === 'MOVE_SELECTION') {
-        if (!isValid) {
-            cursor = null;
-            return;
-        }
-
-        // Logic: Click 1 -> Move Cursor. Click 2 on same tile -> Confirm.
+        if (!isValid) { cursor = null; return; }
         if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
             cursor = { x: pos.x, y: pos.y };
-            console.log("Cursor moved to:", cursor);
         } else {
-            // Confirm Move
             actionSystem.moveUnit(activeUnit, pos.x, pos.y);
             gameState = 'IDLE';
             highlightedTiles = [];
@@ -141,16 +161,10 @@ input.onTap = (pos) => {
         }
     }
     else if (gameState === 'ATTACK_SELECTION') {
-        if (!isValid) {
-            cursor = null;
-            return;
-        }
-
+        if (!isValid) { cursor = null; return; }
         if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
             cursor = { x: pos.x, y: pos.y };
-            // Optional: Highlight entity if present?
         } else {
-            // Confirm Attack
             // Find Target
             let targetId = -1;
             const maxUnits = em.activeMap.length;
@@ -161,19 +175,31 @@ input.onTap = (pos) => {
                 }
             }
 
+            // Allow Self-Targeting for Bandage
+            if (activeSkill && activeSkill.heal && targetId === -1 && pos.x === COMPONENT_TRANSFORM.x[activeUnit] && pos.y === COMPONENT_TRANSFORM.y[activeUnit]) {
+                targetId = activeUnit;
+            }
+
             if (targetId !== -1) {
-                const dmg = actionSystem.performAttack(activeUnit, targetId);
+                let txt = "";
+                let color = "#ff0000";
+
+                if (activeSkill) {
+                    txt = skillSystem.executeSkill(activeUnit, targetId, activeSkill);
+                    if (activeSkill.heal) color = "#00ff00";
+                } else {
+                    const dmg = actionSystem.performAttack(activeUnit, targetId);
+                    txt = `-${dmg}`;
+                }
+
                 const h = chunk.heightMap[chunk.getIndex(pos.x, pos.y)];
                 const scr = isoToScreen(pos.x, pos.y, h, renderer.camX, renderer.camY);
-                ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
+                ui.showFloatingText(scr.x, scr.y, txt, color);
 
                 gameState = 'IDLE';
                 highlightedTiles = [];
                 cursor = null;
                 turnManager.endTurn(activeUnit);
-            } else {
-                console.log("No valid target confirmed.");
-                // Maybe allow attacking empty air? In FFT yes, here maybe not yet.
             }
         }
     }
@@ -187,16 +213,12 @@ const loop = new GameLoop(
     (dt) => {
         renderer.clear();
         renderer.render(chunk, em);
-
-        // Draw Highlights
         if (highlightedTiles.length > 0) {
             const color = (gameState === 'ATTACK_SELECTION') ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 100, 255, 0.4)';
             renderer.drawHighlight(chunk, highlightedTiles, color);
         }
-
-        // Draw Cursor
         if (cursor) {
-            renderer.drawHighlight(chunk, [cursor], 'rgba(255, 255, 0, 0.6)'); // Yellow
+            renderer.drawHighlight(chunk, [cursor], 'rgba(255, 255, 0, 0.6)');
         }
     }
 );

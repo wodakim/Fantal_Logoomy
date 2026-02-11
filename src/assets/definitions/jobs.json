@@ -1,1 +1,25 @@
-{}
+{
+    "FLESH_CARVER": {
+        "id": 0,
+        "name": "Flesh-Carver",
+        "action_skill": "GUTTER_SKILLS",
+        "skills": [
+            {
+                "id": "STONE_THROW",
+                "name": "Stone Throw",
+                "range": 3,
+                "aoe": 0,
+                "damage_mod": 0.8,
+                "effect": "KNOCKBACK"
+            },
+            {
+                "id": "BANDAGE",
+                "name": "Dirty Bandage",
+                "range": 0,
+                "aoe": 0,
+                "heal": 20,
+                "cost_mp": 5
+            }
+        ]
+    }
+}
