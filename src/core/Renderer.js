@@ -16,9 +16,8 @@ export class Renderer {
         this.targetCamX = 0;
         this.targetCamY = 0;
 
-        // Shake
-        this.shakeTime = 0;
-        this.shakeIntensity = 0;
+        // Shake (Disabled by request)
+        // this.shakeTime = 0;
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -39,9 +38,9 @@ export class Renderer {
         }
     }
 
+    // Shake removed to avoid motion sickness
     shake(intensity, duration) {
-        this.shakeIntensity = intensity;
-        this.shakeTime = duration;
+        // No-op
     }
 
     updateCamera(dt) {
@@ -50,15 +49,7 @@ export class Renderer {
         this.camX += (this.targetCamX - this.camX) * speed * dt;
         this.camY += (this.targetCamY - this.camY) * speed * dt;
 
-        // Shake
-        let offX = 0, offY = 0;
-        if (this.shakeTime > 0) {
-            this.shakeTime -= dt;
-            offX = (Math.random() - 0.5) * this.shakeIntensity;
-            offY = (Math.random() - 0.5) * this.shakeIntensity;
-        }
-
-        return { x: this.camX + offX, y: this.camY + offY };
+        return { x: this.camX, y: this.camY };
     }
 
     clear() {
@@ -66,8 +57,8 @@ export class Renderer {
         this.ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    render(chunk, entityManager, dt) { // Added dt
-        const cam = this.updateCamera(dt); // Use interpolated cam
+    render(chunk, entityManager, dt) {
+        const cam = this.updateCamera(dt);
         const ctx = this.ctx;
         const size = chunk.size;
 
@@ -194,17 +185,10 @@ export class Renderer {
         const ctx = this.ctx;
         ctx.fillStyle = color;
 
-        // Need to use current shake/cam pos
-        // But drawHighlight is called outside render loop typically?
-        // Actually called inside main loop. We should expose current cam or pass it.
-        // Simplified: use this.camX (laggy) or pre-calculated.
-        // Let's use this.camX/Y + shake offset (need to store it)
-        // For now, just raw this.camX (shake might desync highlight slightly, acceptable for alpha)
-
         for (let t of tileList) {
             const i = chunk.getIndex(t.x, t.y);
             const h = chunk.heightMap[i];
-            const scr = isoToScreen(t.x, t.y, h, this.camX, this.camY); // Should use shake
+            const scr = isoToScreen(t.x, t.y, h, this.camX, this.camY);
 
             ctx.beginPath();
             ctx.moveTo(scr.x, scr.y);
