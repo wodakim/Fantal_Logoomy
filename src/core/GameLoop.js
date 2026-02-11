@@ -1,5 +1,3 @@
-import { CONFIG } from './Constants.js';
-
 export class GameLoop {
     constructor(updateFn, renderFn) {
         this.updateFn = updateFn;
