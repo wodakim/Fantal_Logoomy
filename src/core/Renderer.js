@@ -1,4 +1,4 @@
-import { TILE_W, TILE_H, H_SCALE } from './Constants.js';
+import { TILE_W, TILE_H, H_SCALE, PROP_ROCK, PROP_TREE, PROP_CORPSE, PROP_LOOT_BAG } from './Constants.js';
 import { isoToScreen } from '../math/Isometric.js';
 import { COMPONENT_TRANSFORM } from '../entities/components/Transform.js';
 import { COMPONENT_SPRITE, SPRITE_CACHE } from '../entities/components/Sprite.js';
@@ -10,14 +10,10 @@ export class Renderer {
         this.width = 0;
         this.height = 0;
 
-        // Camera position
         this.camX = 0;
         this.camY = 0;
         this.targetCamX = 0;
         this.targetCamY = 0;
-
-        // Shake (Disabled by request)
-        // this.shakeTime = 0;
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -38,17 +34,12 @@ export class Renderer {
         }
     }
 
-    // Shake removed to avoid motion sickness
-    shake(intensity, duration) {
-        // No-op
-    }
+    shake(intensity, duration) {}
 
     updateCamera(dt) {
-        // Smooth Pan (Lerp)
         const speed = 5.0;
         this.camX += (this.targetCamX - this.camX) * speed * dt;
         this.camY += (this.targetCamY - this.camY) * speed * dt;
-
         return { x: this.camX, y: this.camY };
     }
 
@@ -142,23 +133,38 @@ export class Renderer {
 
     drawProp(sx, sy, type) {
         const ctx = this.ctx;
-        const w = TILE_W / 2;
-        const h = TILE_H * 1.5;
         const cx = sx;
         const cy = sy + TILE_H / 2;
 
-        if (type === 1) {
+        if (type === PROP_ROCK) {
             ctx.fillStyle = '#555';
             ctx.fillRect(cx - 10, cy - 20, 20, 20);
             ctx.strokeStyle = '#333';
             ctx.strokeRect(cx - 10, cy - 20, 20, 20);
-        } else if (type === 2) {
+        } else if (type === PROP_TREE) {
             ctx.fillStyle = '#5d4037';
             ctx.fillRect(cx - 6, cy - 30, 12, 30);
             ctx.fillStyle = '#2e7d32';
             ctx.beginPath();
             ctx.arc(cx, cy - 35, 15, 0, Math.PI * 2);
             ctx.fill();
+        } else if (type === PROP_CORPSE) {
+            // Skull / Bones
+            ctx.fillStyle = '#e0e0e0';
+            ctx.beginPath();
+            ctx.arc(cx, cy - 5, 8, 0, Math.PI * 2); // Skull
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.fillRect(cx - 3, cy - 7, 2, 2); // Eye L
+            ctx.fillRect(cx + 1, cy - 7, 2, 2); // Eye R
+        } else if (type === PROP_LOOT_BAG) {
+            // Brown Bag
+            ctx.fillStyle = '#8d6e63';
+            ctx.beginPath();
+            ctx.arc(cx, cy - 5, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f1c40f'; // Gold string
+            ctx.fillRect(cx - 2, cy - 12, 4, 4);
         }
     }
 

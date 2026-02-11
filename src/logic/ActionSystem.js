@@ -1,6 +1,7 @@
 import { COMPONENT_TRANSFORM } from '../entities/components/Transform.js';
 import { COMPONENT_STATS } from '../entities/components/Stats.js';
 import { COMPONENT_STATUS } from '../entities/components/Status.js';
+import { PROP_ROCK, PROP_TREE, PROP_LOOT_BAG } from '../core/Constants.js';
 
 export class ActionSystem {
     constructor(chunk, entityManager, combatResolver) {
@@ -9,16 +10,11 @@ export class ActionSystem {
         this.combatResolver = combatResolver;
     }
 
-    // FloodFill to find all reachable tiles
     getMovementRange(unitId) {
-        // ... (Existing Implementation) ...
-        // Re-pasting for context if needed, but assuming previous file content exists.
-        // Actually I need to re-write the file or append to it.
-        // I will re-implement the full class with new methods.
         const startX = COMPONENT_TRANSFORM.x[unitId];
         const startY = COMPONENT_TRANSFORM.y[unitId];
-        const moveStat = 4; // Placeholder
-        const jumpStat = 2; // Placeholder
+        const moveStat = 4;
+        const jumpStat = 2;
 
         let openSet = [{ x: startX, y: startY, cost: 0 }];
         let closedSet = new Map();
@@ -45,11 +41,18 @@ export class ActionSystem {
 
             for (let n of neighbors) {
                 if (n.x < 0 || n.x >= this.chunk.size || n.y < 0 || n.y >= this.chunk.size) continue;
-                const idxCurr = this.chunk.getIndex(current.x, current.y);
+
+                // Prop Obstacle Check
                 const idxNext = this.chunk.getIndex(n.x, n.y);
+                const obj = this.chunk.objIndex[idxNext];
+                // Walkable? 0=None, 3=Corpse(Walkable), 4=Loot(Walkable). 1,2 blocked.
+                if (obj === PROP_ROCK || obj === PROP_TREE) continue;
+
+                const idxCurr = this.chunk.getIndex(current.x, current.y);
                 const h1 = this.chunk.heightMap[idxCurr];
                 const h2 = this.chunk.heightMap[idxNext];
                 if (Math.abs(h1 - h2) > jumpStat) continue;
+
                 const liquid = this.chunk.liquidLevel[idxNext];
                 const tileCost = (liquid > 0) ? 2 : 1;
                 const newCost = current.cost + tileCost;
@@ -65,9 +68,6 @@ export class ActionSystem {
         const startX = COMPONENT_TRANSFORM.x[unitId];
         const startY = COMPONENT_TRANSFORM.y[unitId];
         let tiles = [];
-
-        // Simple Diamond shape for Range 1
-        // |dx| + |dy| <= range
         const size = this.chunk.size;
 
         for (let y = -range; y <= range; y++) {
@@ -76,8 +76,6 @@ export class ActionSystem {
                     const tx = startX + x;
                     const ty = startY + y;
                     if (tx >= 0 && tx < size && ty >= 0 && ty < size) {
-                        // Check height tolerance? (Vertical=2)
-                        // For now, ignore height for attack range vis
                         tiles.push({ x: tx, y: ty });
                     }
                 }
@@ -91,18 +89,22 @@ export class ActionSystem {
         COMPONENT_TRANSFORM.y[unitId] = targetY;
         const idx = this.chunk.getIndex(targetX, targetY);
         COMPONENT_TRANSFORM.z[unitId] = this.chunk.heightMap[idx];
+
+        // Loot Check
+        if (this.chunk.objIndex[idx] === PROP_LOOT_BAG) {
+            console.log(`Unit ${unitId} picked up LOOT!`);
+            // Add item to inventory (TODO)
+            // Remove Bag
+            this.chunk.objIndex[idx] = 0;
+        }
+
         console.log(`Unit ${unitId} moved to ${targetX}, ${targetY}`);
     }
 
     performAttack(attackerId, targetId) {
-        if (!this.combatResolver) {
-            console.error("CombatResolver not linked!");
-            return;
-        }
-
+        if (!this.combatResolver) return;
         const dmg = this.combatResolver.calculateDamage(attackerId, targetId);
         this.combatResolver.applyDamage(targetId, dmg);
-
         return dmg;
     }
 }

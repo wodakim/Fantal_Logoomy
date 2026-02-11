@@ -1,33 +1,39 @@
 import { COMPONENT_STATS } from '../entities/components/Stats.js';
 import { COMPONENT_STATUS } from '../entities/components/Status.js';
+import { PROP_LOOT_BAG, STATUS_DEAD } from '../core/Constants.js';
 
 export class TurnManager {
-    constructor(entityManager) {
+    constructor(entityManager, chunk) {
         this.em = entityManager;
+        this.chunk = chunk; // Need chunk to update props
         this.activeUnit = null;
         this.paused = false;
-
-        // Callbacks
         this.onTurnStart = null;
+
+        this.corpses = []; // {x, y, timer}
+    }
+
+    registerCorpse(x, y, timer) {
+        this.corpses.push({ x, y, timer });
+        console.log("Corpse registered at", x, y);
     }
 
     tick() {
-        if (this.activeUnit !== null) return; // Wait for current turn to end
+        if (this.activeUnit !== null) return;
 
         const stats = COMPONENT_STATS;
         const status = COMPONENT_STATUS;
-        const maxUnits = this.em.activeMap.length; // 256
+        const maxUnits = this.em.activeMap.length;
 
-        // Increment CT for all active units
         let readyUnits = [];
 
         for (let id = 0; id < maxUnits; id++) {
-            if (this.em.activeMap[id] === 0) continue; // Inactive
-            if ((status.flags[id] & 1) !== 0) continue; // Dead (Bit 0)
-            // TODO: Check Stun/Stop status
+            if (this.em.activeMap[id] === 0) continue;
+
+            // Skip Dead Units
+            if ((status.flags[id] & STATUS_DEAD) !== 0) continue;
 
             let spd = stats.speed[id];
-            // Safety clamp
             if (spd < 1) spd = 1;
 
             stats.ct[id] += spd;
@@ -38,7 +44,6 @@ export class TurnManager {
         }
 
         if (readyUnits.length > 0) {
-            // Priority: Highest CT, then Speed as tie breaker
             readyUnits.sort((a, b) => {
                 const ctDiff = stats.ct[b] - stats.ct[a];
                 if (ctDiff !== 0) return ctDiff;
@@ -52,20 +57,37 @@ export class TurnManager {
     startTurn(unitId) {
         this.activeUnit = unitId;
         console.log(`Unit ${unitId} Turn Start!`);
+
+        // Tick Corpses
+        // (Usually happens at Global Tick or Round start, but here per turn is fine for "Tick-based decay")
+        // Actually FFT corpses decay on their own CT? Simplified: Decay every unit turn? Too fast.
+        // Decay every "Round"? Hard to define in CT system.
+        // Let's Decay every time CT accumulator loops?
+        // Simplest: Decay when the Unit who died WOULD have had a turn?
+        // Or just flat decay for now every time any turn starts (Fast decay).
+        // Let's do: Decay 1 tick every turn. 3 turns = very fast.
+        // Let's set timer to 10 turns.
+
+        this.corpses.forEach(c => {
+            if (c.timer > 0) c.timer--;
+            if (c.timer === 0 && !c.processed) {
+                c.processed = true;
+                this.transformCorpseToLoot(c.x, c.y);
+            }
+        });
+
         if (this.onTurnStart) this.onTurnStart(unitId);
     }
 
-    endTurn(unitId, actionCost = 0) {
+    transformCorpseToLoot(x, y) {
+        console.log("Corpse decayed to Loot at", x, y);
+        const idx = this.chunk.getIndex(x, y);
+        this.chunk.objIndex[idx] = PROP_LOOT_BAG;
+    }
+
+    endTurn(unitId) {
         if (this.activeUnit !== unitId) return;
-
-        // Reset CT
-        // In FFT, Moving consumes 20 CT, Acting consumes 30 CT, etc.
-        // If Wait (No Move, No Act), CT becomes 60?
-        // Let's use simplified: Reset to 0 for now, or sub 100.
-        // TDD says: "L'unité agit quand CT >= 100".
-        // Usually CT resets to 0 or keeps overflow. Let's reset to 0.
-
-        COMPONENT_STATS.ct[unitId] = 0; // Simple reset
+        COMPONENT_STATS.ct[unitId] = 0;
         this.activeUnit = null;
     }
 }

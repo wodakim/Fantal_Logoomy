@@ -57,10 +57,11 @@ spriteGen.generateSprite(666, { color: '#e74c3c' }).then(bmp => SPRITE_CACHE[1] 
 const input = new InputSystem(renderer);
 input.currentChunk = chunk;
 
-const turnManager = new TurnManager(em);
+// Need correct instantiation order
+const turnManager = new TurnManager(em, chunk); // Passed chunk for corpse props
 const ui = new CombatOverlay(turnManager);
-const unitInfo = new UnitInfo(); // New UI
-const combatResolver = new CombatResolver();
+const unitInfo = new UnitInfo();
+const combatResolver = new CombatResolver(chunk, turnManager); // Passed TM for registering corpses
 const actionSystem = new ActionSystem(chunk, em, combatResolver);
 const skillSystem = new SkillSystem(actionSystem);
 skillSystem.loadDefinitions();
@@ -86,11 +87,11 @@ const aiSystem = {
         }
 
         const dmg = actionSystem.performAttack(unitId, targetId);
-        const h = chunk.heightMap[chunk.getIndex(tx, ty)];
-        const scr = isoToScreen(tx, ty, h, renderer.camX, renderer.camY);
-        ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
-
-        renderer.shake(5, 0.2); // Shake on hit!
+        if (dmg) {
+            const h = chunk.heightMap[chunk.getIndex(tx, ty)];
+            const scr = isoToScreen(tx, ty, h, renderer.camX, renderer.camY);
+            ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
+        }
 
         setTimeout(() => turnManager.endTurn(unitId), 1000);
     }
@@ -134,7 +135,7 @@ ui.onWaitClicked = (unitId) => {
 };
 
 input.onPan = (dx, dy) => {
-    renderer.targetCamX += dx; // Use target for smooth pan
+    renderer.targetCamX += dx;
     renderer.targetCamY += dy;
 };
 
@@ -150,10 +151,13 @@ input.onTap = (pos) => {
             break;
         }
     }
+    // Don't show info for dead units? (Sprite active check is handled in renderer, here we check activeMap)
+    // We should check if Dead bit is set?
+
     if (clickedUnit !== -1) {
         unitInfo.show(clickedUnit, COMPONENT_STATS, (clickedUnit===0)?"Hero":"Monster");
     } else {
-        // unitInfo.hide(); // Keep visible or hide? Let's hide if tap empty ground
+        // Hide info logic?
     }
 
     if (gameState === 'MOVE_SELECTION') {
@@ -185,11 +189,9 @@ input.onTap = (pos) => {
                 if (activeSkill) {
                     txt = skillSystem.executeSkill(activeUnit, targetId, activeSkill);
                     if (activeSkill.heal) color = "#00ff00";
-                    else renderer.shake(5, 0.2); // Shake on skill dmg
                 } else {
                     const dmg = actionSystem.performAttack(activeUnit, targetId);
                     txt = `-${dmg}`;
-                    renderer.shake(5, 0.2); // Shake on attack
                 }
 
                 const h = chunk.heightMap[chunk.getIndex(pos.x, pos.y)];
@@ -212,7 +214,7 @@ const loop = new GameLoop(
     },
     (dt) => {
         renderer.clear();
-        renderer.render(chunk, em, dt); // Pass dt for cam/shake
+        renderer.render(chunk, em, dt);
         if (highlightedTiles.length > 0) {
             const color = (gameState === 'ATTACK_SELECTION') ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 100, 255, 0.4)';
             renderer.drawHighlight(chunk, highlightedTiles, color);
