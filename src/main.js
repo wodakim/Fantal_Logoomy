@@ -5,6 +5,7 @@ import { MapGenerator } from './world/MapGenerator.js';
 import { FluidEngine } from './world/FluidEngine.js';
 import { TurnManager } from './logic/TurnManager.js';
 import { CombatOverlay } from './ui/CombatOverlay.js';
+import { UnitInfo } from './ui/UnitInfo.js';
 import { EntityManager } from './entities/EntityManager.js';
 import { COMPONENT_STATS } from './entities/components/Stats.js';
 import { COMPONENT_TRANSFORM } from './entities/components/Transform.js';
@@ -28,8 +29,9 @@ const fluidEngine = new FluidEngine(chunk);
 // Entities
 const em = new EntityManager();
 const heroId = em.createEntity();
-COMPONENT_STATS.speed[heroId] = 12;
+COMPONENT_STATS.maxHp[heroId] = 100;
 COMPONENT_STATS.hp[heroId] = 100;
+COMPONENT_STATS.speed[heroId] = 12;
 COMPONENT_TRANSFORM.x[heroId] = 8;
 COMPONENT_TRANSFORM.y[heroId] = 8;
 COMPONENT_TRANSFORM.z[heroId] = chunk.heightMap[chunk.getIndex(8,8)];
@@ -37,8 +39,9 @@ COMPONENT_SPRITE.active[heroId] = 1;
 COMPONENT_SPRITE.spriteId[heroId] = 0;
 
 const enemyId = em.createEntity();
-COMPONENT_STATS.speed[enemyId] = 8;
+COMPONENT_STATS.maxHp[enemyId] = 50;
 COMPONENT_STATS.hp[enemyId] = 50;
+COMPONENT_STATS.speed[enemyId] = 8;
 COMPONENT_TRANSFORM.x[enemyId] = 10;
 COMPONENT_TRANSFORM.y[enemyId] = 10;
 COMPONENT_TRANSFORM.z[enemyId] = chunk.heightMap[chunk.getIndex(10,10)];
@@ -56,14 +59,16 @@ input.currentChunk = chunk;
 
 const turnManager = new TurnManager(em);
 const ui = new CombatOverlay(turnManager);
+const unitInfo = new UnitInfo(); // New UI
 const combatResolver = new CombatResolver();
 const actionSystem = new ActionSystem(chunk, em, combatResolver);
 const skillSystem = new SkillSystem(actionSystem);
-skillSystem.loadDefinitions(); // Async but fast enough for local mock
+skillSystem.loadDefinitions();
 ui.skillSystem = skillSystem;
 
 const pathfinder = new Pathfinding(chunk);
 
+// AI Stub
 const aiSystem = {
     executeTurn: (unitId) => {
         console.log(`AI (Unit ${unitId}) Thinking...`);
@@ -73,30 +78,19 @@ const aiSystem = {
         const ux = COMPONENT_TRANSFORM.x[unitId];
         const uy = COMPONENT_TRANSFORM.y[unitId];
 
-        // Find path to target
-        // We want to be adjacent (Range 1)
-        // Find path to target, then pop last node? Or path to adjacent tile?
-        // Simple heuristic: Path to Target. If path length > 1, move to index [length-2].
         const path = pathfinder.findPath(ux, uy, tx, ty, 2);
 
-        // If path exists and length > 1 (Target is not self)
         if (path && path.length > 1) {
-            // Target is occupied by Hero, so Pathfinding might actually return empty if we treat units as obstacles?
-            // Current Pathfinding only checks Props.
-            // So it will return path TO the hero.
-            // We want to stop 1 step before.
-            const dest = path[path.length - 2]; // One step before target
-
-            // Move there
-            // Simulate "Walking" (Teleport for now)
+            const dest = path[path.length - 2];
             actionSystem.moveUnit(unitId, dest.x, dest.y);
         }
 
-        // Attack
         const dmg = actionSystem.performAttack(unitId, targetId);
         const h = chunk.heightMap[chunk.getIndex(tx, ty)];
         const scr = isoToScreen(tx, ty, h, renderer.camX, renderer.camY);
         ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
+
+        renderer.shake(5, 0.2); // Shake on hit!
 
         setTimeout(() => turnManager.endTurn(unitId), 1000);
     }
@@ -127,7 +121,7 @@ ui.onAttackClicked = (unitId) => {
 };
 
 ui.onSkillClicked = (unitId, skill) => {
-    gameState = 'ATTACK_SELECTION'; // Reuse attack logic for now
+    gameState = 'ATTACK_SELECTION';
     highlightedTiles = actionSystem.getAttackRange(unitId, skill.range);
     cursor = null;
     activeSkill = skill;
@@ -140,13 +134,27 @@ ui.onWaitClicked = (unitId) => {
 };
 
 input.onPan = (dx, dy) => {
-    renderer.camX += dx;
-    renderer.camY += dy;
+    renderer.targetCamX += dx; // Use target for smooth pan
+    renderer.targetCamY += dy;
 };
 
 input.onTap = (pos) => {
     const activeUnit = turnManager.activeUnit;
     const isValid = highlightedTiles.some(t => t.x === pos.x && t.y === pos.y);
+
+    // Show Info on Tap
+    let clickedUnit = -1;
+    for(let id=0; id<em.activeMap.length; id++) {
+        if(em.activeMap[id] && COMPONENT_TRANSFORM.x[id] === pos.x && COMPONENT_TRANSFORM.y[id] === pos.y) {
+            clickedUnit = id;
+            break;
+        }
+    }
+    if (clickedUnit !== -1) {
+        unitInfo.show(clickedUnit, COMPONENT_STATS, (clickedUnit===0)?"Hero":"Monster");
+    } else {
+        // unitInfo.hide(); // Keep visible or hide? Let's hide if tap empty ground
+    }
 
     if (gameState === 'MOVE_SELECTION') {
         if (!isValid) { cursor = null; return; }
@@ -165,17 +173,7 @@ input.onTap = (pos) => {
         if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
             cursor = { x: pos.x, y: pos.y };
         } else {
-            // Find Target
-            let targetId = -1;
-            const maxUnits = em.activeMap.length;
-            for(let id=0; id<maxUnits; id++) {
-                if(em.activeMap[id] && COMPONENT_TRANSFORM.x[id] === pos.x && COMPONENT_TRANSFORM.y[id] === pos.y && id !== activeUnit) {
-                    targetId = id;
-                    break;
-                }
-            }
-
-            // Allow Self-Targeting for Bandage
+            let targetId = clickedUnit;
             if (activeSkill && activeSkill.heal && targetId === -1 && pos.x === COMPONENT_TRANSFORM.x[activeUnit] && pos.y === COMPONENT_TRANSFORM.y[activeUnit]) {
                 targetId = activeUnit;
             }
@@ -187,9 +185,11 @@ input.onTap = (pos) => {
                 if (activeSkill) {
                     txt = skillSystem.executeSkill(activeUnit, targetId, activeSkill);
                     if (activeSkill.heal) color = "#00ff00";
+                    else renderer.shake(5, 0.2); // Shake on skill dmg
                 } else {
                     const dmg = actionSystem.performAttack(activeUnit, targetId);
                     txt = `-${dmg}`;
+                    renderer.shake(5, 0.2); // Shake on attack
                 }
 
                 const h = chunk.heightMap[chunk.getIndex(pos.x, pos.y)];
@@ -212,7 +212,7 @@ const loop = new GameLoop(
     },
     (dt) => {
         renderer.clear();
-        renderer.render(chunk, em);
+        renderer.render(chunk, em, dt); // Pass dt for cam/shake
         if (highlightedTiles.length > 0) {
             const color = (gameState === 'ATTACK_SELECTION') ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 100, 255, 0.4)';
             renderer.drawHighlight(chunk, highlightedTiles, color);

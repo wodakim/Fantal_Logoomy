@@ -7,104 +7,105 @@ export function isoToScreen(x, y, z, camX, camY) {
     };
 }
 
-// Improved screenToIso with Z-Plane intersection
-export function screenToIso(sx, sy, camX, camY) {
-    // 1. Adjust for Camera
-    const adjX = sx - camX;
-    const adjY = sy - camY;
-
-    // 2. We need to solve for x, y assuming z = 0 (Base Plane picking)
-    // Formula derivation:
-    // adjX = (x - y) * (W/2)
-    // adjY = (x + y) * (H/2)  (if z=0)
-    //
-    // x - y = adjX / (W/2)
-    // x + y = adjY / (H/2)
-    //
-    // 2x = adjX/(W/2) + adjY/(H/2)
-    // x = (adjX/(W/2) + adjY/(H/2)) / 2
-
-    // However, the previous implementation might have had a Y-offset issue.
-    // Let's be precise.
-    // The "center" of the tile (0,0) in isoToScreen is at (camX, camY).
-    // Usually iso engines center the top-left corner or the center of the diamond.
-    // With current formula: (0,0,0) -> (camX, camY).
-    // So if I click exactly at (camX, camY), I should get (0,0).
-
-    const halfW = TILE_W / 2;
-    const halfH = TILE_H / 2;
-
-    // Solve linear system
-    const dy = adjY / halfH;
-    const dx = adjX / halfW;
-
-    const rawX = (dy + dx) / 2;
-    const rawY = (dy - dx) / 2;
-
-    return {
-        x: Math.round(rawX),
-        y: Math.round(rawY)
-    };
-}
-
-// Raycast helper to find tile at screen pos considering Height
-// Iterates from top height down to find the first tile under cursor
+// Improved precise picking with diamond intersection
 export function pickTile(sx, sy, camX, camY, chunk) {
-    // We check every tile? No, too slow.
-    // We can cast a ray. Or simpler:
-    // Project every visible tile to screen (bounding box) and check pointInPoly.
-    // Or: iterate Z levels.
+    // We iterate from the camera perspective (Front to Back? Top to Bottom?)
+    // Actually, we want the "Front-most" tile that contains the point.
+    // In Painter's algo, we draw Back to Front.
+    // So for picking, we should check Front to Back (Reverse draw order) to find the first hit.
+    // Draw order was: Y 0->Size, X 0->Size.
+    // So Reverse order: Y Size-1 -> 0, X Size-1 -> 0.
 
-    // Simple heuristic:
-    // 1. Get base coordinate (Z=0)
-    // 2. Check Z=MaxHeight to Z=0.
-    // For a tile at (x,y,z), the screen Y is higher (smaller value) by z*H_SCALE.
+    // However, height complicates this. A high tile at Y=0 might Occlude a low tile at Y=1.
+    // So we must check ALL tiles and find the one with the highest "Sort Depth" that contains the point?
+    // Or just iterate Z levels?
 
-    // Let's brute force a bit around the base coord.
-    // The "true" tile might be at x+1, y+1 but high up?
-    // Actually, increasing Z moves the sprite UP (lower Y screen).
+    // Robust approach: Point-in-Rhombus check for every visible tile surface.
+    // Optimization: Only check tiles within screen bounds.
 
-    // Let's stick to the Z=0 plane for movement selection if the map is flat-ish.
-    // But for "Flesh-Carver" with height 6, clicking the top of a hill (Z=6)
-    // will register as a tile "behind" it at Z=0.
-    // Offset is Y + z*H_SCALE.
+    let bestCandidate = null;
+    let minDistToCenter = Infinity; // To break ties, center of tile is best
 
-    // Inverse with Z:
-    // adjY + z*H = (x+y)*halfH
+    // We iterate broadly around the estimated flat position
+    // Flat estimate:
+    const flatIso = screenToIsoFlat(sx, sy, camX, camY);
+    const searchRadius = 8; // Check 8 tiles around estimate to account for height
 
-    // Improved Picker:
-    // Cast a ray "down" the screen Y axis?
-    // Actually, just loop through candidates.
-    // The clicked pixel (sx, sy) could correspond to (x,y) at height Z.
-    // So screenToIso(sx, sy + Z*H_SCALE) would give the x,y.
+    const startX = Math.max(0, flatIso.x - searchRadius);
+    const endX = Math.min(chunk.size, flatIso.x + searchRadius);
+    const startY = Math.max(0, flatIso.y - searchRadius);
+    const endY = Math.min(chunk.size, flatIso.y + searchRadius);
 
-    const candidates = [];
-    const maxZ = 16; // Max height
+    // We want the tile that is "visually on top".
+    // Visually on top = Drawn last.
+    // Drawn last = Highest (X + Y) + Z factor?
+    // Let's iterate in Draw Order (Back to Front) and keep updating "hit".
+    // The last hit is the one on top.
 
-    for (let z = 0; z <= maxZ; z++) {
-        // Shift screen Y "down" to compensate for Z height lifting it up
-        // If I click a pixel, and it was a tile at height Z, then the "base" projection
-        // would have been lower by Z*H_SCALE.
-        const projectedSY = sy + (z * H_SCALE);
+    for (let y = 0; y < chunk.size; y++) {
+        for (let x = 0; x < chunk.size; x++) {
+            // Optimization: Skip if far from mouse
+            // (Optional)
 
-        const coord = screenToIso(sx, projectedSY, camX, camY);
+            const i = chunk.getIndex(x, y);
+            const h = chunk.heightMap[i];
 
-        // Check if this coordinate exists in chunk and matches height
-        if (coord.x >= 0 && coord.x < chunk.size && coord.y >= 0 && coord.y < chunk.size) {
-            const idx = chunk.getIndex(coord.x, coord.y);
-            const actualH = chunk.heightMap[idx];
+            // Get Screen Box for Top Face
+            const scr = isoToScreen(x, y, h, camX, camY);
 
-            // If the calculated tile actually has this Z (or close to it)
-            // We use a tolerance because steps are discrete
-            if (Math.abs(actualH - z) < 1) { // Strict match
-                 // Found a tile!
-                 // But multiple Z levels could align. We want the "closest" to camera?
-                 // In iso, highest Z is drawn last (on top). So we want the highest Z match.
-                 return coord;
+            // Check if point (sx, sy) is inside the diamond at scr
+            if (pointInDiamond(sx, sy, scr.x, scr.y, TILE_W, TILE_H)) {
+                bestCandidate = { x: x, y: y };
             }
+
+            // Check vertical wall (Front faces: South and East walls)
+            // If this tile is high, it has a wall going down.
+            // But usually we just click the top.
+            // Let's stick to Top Face for now, it's usually enough if Z logic is correct.
+            // If we want "Intelligent" clicking, we should check if we clicked the "Body" of the block.
+            // Body extends from Top Face Y to Top Face Y + Height.
+            // But we only see walls if neighbor is lower.
+            // Let's implement Top Face hit only first, as it's standard FFT.
         }
     }
 
-    // Fallback to base plane if no high tile found
-    return screenToIso(sx, sy, camX, camY);
+    if (bestCandidate) return bestCandidate;
+
+    // Fallback
+    return flatIso;
+}
+
+// Basic flat plane projection
+function screenToIsoFlat(sx, sy, camX, camY) {
+    const adjX = sx - camX;
+    const adjY = sy - camY;
+    const halfW = TILE_W / 2;
+    const halfH = TILE_H / 2;
+    const dy = adjY / halfH;
+    const dx = adjX / halfW;
+    return {
+        x: Math.round((dy + dx) / 2),
+        y: Math.round((dy - dx) / 2)
+    };
+}
+
+function pointInDiamond(px, py, cx, cy, w, h) {
+    // cx, cy is Top Corner of diamond in my engine?
+    // Let's verify isoToScreen logic.
+    // x: (x - y) * (W / 2) + camX
+    // If x=0, y=0 -> camX.
+    // If x=1, y=0 -> camX + W/2.
+    // If x=0, y=1 -> camX - W/2.
+    // If x=1, y=1 -> camX.
+    // So (0,0) is Top. (1,1) is Bottom.
+    // The center of the diamond is actually cx, cy + h/2.
+
+    const dx = Math.abs(px - cx);
+    const dy = Math.abs(py - (cy + h/2)); // Center Y relative
+
+    // Diamond formula: |dx|/W + |dy|/H <= 0.5 ?
+    // Half Width = w/2. Half Height = h/2.
+    // |dx|/(w/2) + |dy|/(h/2) <= 1
+
+    return (dx / (w/2) + dy / (h/2)) <= 1;
 }

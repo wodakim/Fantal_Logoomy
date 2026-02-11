@@ -8,11 +8,14 @@ Legende :
 ## Module 1: Core Engine & Isometric Architecture
 *   🟩 **1.1. Philosophie du Moteur (Strict Vanilla)**
 *   🟩 **1.2. Mathématiques de Projection Isométrique**
+    *   Updated `pickTile` for precise Diamond-Hitbox selection.
 *   🟩 **1.3. Structure de Données (Chunk System)**
 *   🟩 **1.4. Algorithme de Rendu**
+    *   Added `shake()` and Smooth Camera.
 *   🟩 **1.5. Le Moteur Temporel (Clocktick)**
 *   🟩 **1.6. The Fluid Engine (Phase 1.5)**
-*   🔺 **1.7. Système de "Juice" & Caméra**
+*   🟩 **1.7. Système de "Juice" & Caméra**
+    *   Screenshake implemented.
 
 ## Module 2: Procedural Generation
 *   🟩 **2.1. L'Algorithme "Flesh-Carver"**
@@ -37,15 +40,13 @@ Legende :
 *   🟩 **4.3. Séquence de Résolution**
 *   🔺 **4.4. Système de Réaction**
 *   🟩 **4.5. Interface de Combat (Mobile)**
+    *   Unit Info Panel added.
 
 ## Module 5: Job System
 *   🟩 **5.1 - 5.7** (Système de base implémenté)
-    *   `SkillSystem.js` gère les compétences.
-    *   Menu dynamique dans `CombatOverlay`.
 
 ## Module 6: AI
 *   🟩 **6.1 - 6.7** (Système d'IA)
-    *   IA utilise maintenant le Pathfinding pour contourner les Props.
 
 ## Module 7: Economy & Meta
 *   🔺 **7.1 - 7.6** (Tout le système de loot et sauvegarde)

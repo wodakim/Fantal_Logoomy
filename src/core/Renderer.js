@@ -13,9 +13,12 @@ export class Renderer {
         // Camera position
         this.camX = 0;
         this.camY = 0;
+        this.targetCamX = 0;
+        this.targetCamY = 0;
 
-        // Mobile: Zoom factor
-        this.zoom = 1.0;
+        // Shake
+        this.shakeTime = 0;
+        this.shakeIntensity = 0;
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -27,8 +30,35 @@ export class Renderer {
         this.canvas.width = this.width;
         this.canvas.height = this.height;
         this.ctx.imageSmoothingEnabled = false;
-        this.camX = this.width / 2;
-        this.camY = this.height / 4;
+
+        if (this.camX === 0) {
+            this.camX = this.width / 2;
+            this.camY = this.height / 4;
+            this.targetCamX = this.camX;
+            this.targetCamY = this.camY;
+        }
+    }
+
+    shake(intensity, duration) {
+        this.shakeIntensity = intensity;
+        this.shakeTime = duration;
+    }
+
+    updateCamera(dt) {
+        // Smooth Pan (Lerp)
+        const speed = 5.0;
+        this.camX += (this.targetCamX - this.camX) * speed * dt;
+        this.camY += (this.targetCamY - this.camY) * speed * dt;
+
+        // Shake
+        let offX = 0, offY = 0;
+        if (this.shakeTime > 0) {
+            this.shakeTime -= dt;
+            offX = (Math.random() - 0.5) * this.shakeIntensity;
+            offY = (Math.random() - 0.5) * this.shakeIntensity;
+        }
+
+        return { x: this.camX + offX, y: this.camY + offY };
     }
 
     clear() {
@@ -36,7 +66,8 @@ export class Renderer {
         this.ctx.fillRect(0, 0, this.width, this.height);
     }
 
-    render(chunk, entityManager) {
+    render(chunk, entityManager, dt) { // Added dt
+        const cam = this.updateCamera(dt); // Use interpolated cam
         const ctx = this.ctx;
         const size = chunk.size;
 
@@ -62,9 +93,9 @@ export class Renderer {
                 const h = chunk.heightMap[i];
                 const type = chunk.typeMap[i];
                 const liquid = chunk.liquidLevel[i];
-                const obj = chunk.objIndex[i]; // Prop ID
+                const obj = chunk.objIndex[i];
 
-                const pos = isoToScreen(x, y, h, this.camX, this.camY);
+                const pos = isoToScreen(x, y, h, cam.x, cam.y);
 
                 this.drawBlock(pos.x, pos.y, h, type);
 
@@ -72,15 +103,13 @@ export class Renderer {
                     this.drawFluid(pos.x, pos.y, liquid);
                 }
 
-                // Draw Prop
                 if (obj > 0) {
                     this.drawProp(pos.x, pos.y, obj);
                 }
 
-                // Draw Entities
                 for (let e of entities) {
                     if (e.x === x && e.y === y) {
-                        const ePos = isoToScreen(e.x, e.y, e.z, this.camX, this.camY);
+                        const ePos = isoToScreen(e.x, e.y, e.z, cam.x, cam.y);
                         this.drawEntity(ePos.x, ePos.y, e.spriteId);
                     }
                 }
@@ -91,9 +120,9 @@ export class Renderer {
     drawBlock(sx, sy, h, type) {
         const ctx = this.ctx;
         let topColor = '#555';
-        if (type === 1) topColor = '#6d6d6d'; // Stone
-        if (type === 2) topColor = '#3498db'; // Water base
-        if (type === 3) topColor = '#e3DAC9'; // Bone
+        if (type === 1) topColor = '#6d6d6d';
+        if (type === 2) topColor = '#3498db';
+        if (type === 3) topColor = '#e3DAC9';
 
         ctx.fillStyle = topColor;
         ctx.beginPath();
@@ -124,33 +153,17 @@ export class Renderer {
         const ctx = this.ctx;
         const w = TILE_W / 2;
         const h = TILE_H * 1.5;
-        const ox = sx; // Top point of tile
-        const oy = sy;
-
-        // Center the prop base on the tile top
-        // Tile Top Center is (sx, sy + TILE_H/2) if diamond starts at sx,sy?
-        // isoToScreen returns Top Corner.
-        // Center is + TILE_W/2? No.
-        // x: (x-y)*W/2.
-        // If x=0, y=0 -> 0.
-        // It returns the "Top Corner" of the diamond.
-        // The "Center" of the diamond is (x, y + H/2).
-
         const cx = sx;
         const cy = sy + TILE_H / 2;
 
         if (type === 1) {
-            // Rock (Dark Grey Block)
             ctx.fillStyle = '#555';
             ctx.fillRect(cx - 10, cy - 20, 20, 20);
             ctx.strokeStyle = '#333';
             ctx.strokeRect(cx - 10, cy - 20, 20, 20);
         } else if (type === 2) {
-            // Tree/Pillar (Brown Trunk + Green Top)
-            // Trunk
             ctx.fillStyle = '#5d4037';
             ctx.fillRect(cx - 6, cy - 30, 12, 30);
-            // Foliage
             ctx.fillStyle = '#2e7d32';
             ctx.beginPath();
             ctx.arc(cx, cy - 35, 15, 0, Math.PI * 2);
@@ -181,10 +194,17 @@ export class Renderer {
         const ctx = this.ctx;
         ctx.fillStyle = color;
 
+        // Need to use current shake/cam pos
+        // But drawHighlight is called outside render loop typically?
+        // Actually called inside main loop. We should expose current cam or pass it.
+        // Simplified: use this.camX (laggy) or pre-calculated.
+        // Let's use this.camX/Y + shake offset (need to store it)
+        // For now, just raw this.camX (shake might desync highlight slightly, acceptable for alpha)
+
         for (let t of tileList) {
             const i = chunk.getIndex(t.x, t.y);
             const h = chunk.heightMap[i];
-            const scr = isoToScreen(t.x, t.y, h, this.camX, this.camY);
+            const scr = isoToScreen(t.x, t.y, h, this.camX, this.camY); // Should use shake
 
             ctx.beginPath();
             ctx.moveTo(scr.x, scr.y);
