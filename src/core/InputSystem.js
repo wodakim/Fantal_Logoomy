@@ -1,37 +1,41 @@
-import { screenToIso } from '../math/Isometric.js';
+import { screenToIso, pickTile } from '../math/Isometric.js';
 import { TILE_W, TILE_H } from './Constants.js';
 
 export class InputSystem {
     constructor(renderer) {
-        this.renderer = renderer; // Need renderer for camera/scaling
+        this.renderer = renderer;
         this.canvas = renderer.canvas;
-
-        // State
         this.activeTouch = null;
         this.lastTapTime = 0;
         this.longPressTimer = null;
 
-        // Output events
-        this.onTap = null;        // (x, y) - Grid coordinates
-        this.onDoubleTap = null;  // (x, y)
-        this.onLongPress = null;  // (x, y)
-        this.onPan = null;        // (dx, dy) - Screen pixels
+        this.onTap = null;
+        this.onDoubleTap = null;
+        this.onLongPress = null;
+        this.onPan = null;
+
+        // Optional: Reference to Chunk for height-aware picking
+        // Since InputSystem is core, we might need to pass chunk in picking
+        this.currentChunk = null; // To be set by Main
 
         this._initListeners();
     }
 
+    // ... (Existing Listener Code Omitted for brevity, assuming it works well) ...
+    // Wait, I need to ensure the full class is preserved.
+    // I will rewrite the listeners to be safe.
+
     _initListeners() {
         const c = this.canvas;
-
-        // Touch Events
         c.addEventListener('touchstart', (e) => this._handleTouchStart(e), { passive: false });
         c.addEventListener('touchmove', (e) => this._handleTouchMove(e), { passive: false });
         c.addEventListener('touchend', (e) => this._handleTouchEnd(e), { passive: false });
-
-        // Mouse fallback (for testing)
         c.addEventListener('mousedown', (e) => this._handleMouseDown(e));
         c.addEventListener('mousemove', (e) => this._handleMouseMove(e));
         c.addEventListener('mouseup', (e) => this._handleMouseUp(e));
+
+        // Prevent context menu on right click
+        c.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     _handleTouchStart(e) {
@@ -45,14 +49,13 @@ export class InputSystem {
                 curX: t.clientX,
                 curY: t.clientY,
                 startTime: performance.now(),
-                moved: false
+                moved: false,
+                suppressTap: false
             };
-
-            // Start Long Press Timer (e.g., 500ms)
             this.longPressTimer = setTimeout(() => {
                 if (this.activeTouch && !this.activeTouch.moved) {
                      this._triggerAction('LONG_PRESS', this.activeTouch.startX, this.activeTouch.startY);
-                     this.activeTouch.suppressTap = true; // Don't trigger tap on release
+                     this.activeTouch.suppressTap = true;
                 }
             }, 500);
         }
@@ -61,7 +64,6 @@ export class InputSystem {
     _handleTouchMove(e) {
         e.preventDefault();
         if (!this.activeTouch) return;
-
         const t = e.changedTouches[0];
         if (t.identifier !== this.activeTouch.id) return;
 
@@ -71,11 +73,8 @@ export class InputSystem {
         if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             this.activeTouch.moved = true;
             clearTimeout(this.longPressTimer);
-
-            // Trigger Pan
             if (this.onPan) this.onPan(dx, dy);
         }
-
         this.activeTouch.curX = t.clientX;
         this.activeTouch.curY = t.clientY;
     }
@@ -83,46 +82,41 @@ export class InputSystem {
     _handleTouchEnd(e) {
         e.preventDefault();
         if (!this.activeTouch) return;
-
         clearTimeout(this.longPressTimer);
 
         if (!this.activeTouch.moved && !this.activeTouch.suppressTap) {
             const now = performance.now();
             if (now - this.lastTapTime < 300) {
-                // Double Tap
                 this._triggerAction('DOUBLE_TAP', this.activeTouch.startX, this.activeTouch.startY);
                 this.lastTapTime = 0;
             } else {
-                // Single Tap
                 this._triggerAction('TAP', this.activeTouch.startX, this.activeTouch.startY);
                 this.lastTapTime = now;
             }
         }
-
         this.activeTouch = null;
     }
 
-    // Mouse Fallbacks (simplified)
     _handleMouseDown(e) {
-        this._handleTouchStart({
-            preventDefault: () => {},
-            touches: [{ identifier: 0, clientX: e.clientX, clientY: e.clientY }]
-        });
+        this._handleTouchStart({ preventDefault: ()=>{}, touches: [{ identifier: 0, clientX: e.clientX, clientY: e.clientY }] });
     }
     _handleMouseMove(e) {
         if (!this.activeTouch) return;
-        this._handleTouchMove({
-            preventDefault: () => {},
-            changedTouches: [{ identifier: 0, clientX: e.clientX, clientY: e.clientY }]
-        });
+        this._handleTouchMove({ preventDefault: ()=>{}, changedTouches: [{ identifier: 0, clientX: e.clientX, clientY: e.clientY }] });
     }
     _handleMouseUp(e) {
-        this._handleTouchEnd({ preventDefault: () => {} });
+        this._handleTouchEnd({ preventDefault: ()=>{} });
     }
 
     _triggerAction(type, sx, sy) {
-        // Convert screen coords to Iso Grid
-        const iso = screenToIso(sx, sy, this.renderer.camX, this.renderer.camY);
+        let iso;
+        if (this.currentChunk) {
+            // Use precise picking if chunk is available
+            iso = pickTile(sx, sy, this.renderer.camX, this.renderer.camY, this.currentChunk);
+        } else {
+            // Fallback to flat plane
+            iso = screenToIso(sx, sy, this.renderer.camX, this.renderer.camY);
+        }
 
         if (type === 'TAP' && this.onTap) this.onTap(iso);
         if (type === 'DOUBLE_TAP' && this.onDoubleTap) this.onDoubleTap(iso);
