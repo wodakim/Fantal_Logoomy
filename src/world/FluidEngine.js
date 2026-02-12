@@ -5,6 +5,14 @@ export class FluidEngine {
         this.chunk = chunk;
         this.updateInterval = 0.1; // Update fluids every 0.1s
         this.timer = 0;
+
+        // Pre-allocate neighbor offsets to avoid GC
+        this.offsets = [
+            { x: 0, y: -1 }, // N
+            { x: 0, y: 1 },  // S
+            { x: -1, y: 0 }, // W
+            { x: 1, y: 0 }   // E
+        ];
     }
 
     update(dt) {
@@ -33,20 +41,15 @@ export class FluidEngine {
                 if (val <= 0) continue; // No fluid here
 
                 // Try to flow down (Gravity)
-                // Check neighbors: N, S, E, W
-                const neighbors = [
-                    { x: x, y: y - 1 }, // N
-                    { x: x, y: y + 1 }, // S
-                    { x: x - 1, y: y }, // W
-                    { x: x + 1, y: y }  // E
-                ];
-
                 let flowed = false;
 
-                for (let n of neighbors) {
-                    if (n.x < 0 || n.x >= size || n.y < 0 || n.y >= size) continue;
+                for (let k = 0; k < 4; k++) {
+                    const nx = x + this.offsets[k].x;
+                    const ny = y + this.offsets[k].y;
 
-                    const ni = this.chunk.getIndex(n.x, n.y);
+                    if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+
+                    const ni = this.chunk.getIndex(nx, ny);
 
                     // Check height difference
                     // Fluid flows to lower ground

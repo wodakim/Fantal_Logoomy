@@ -4,6 +4,12 @@ export class BiomeGenerator {
     constructor(chunk) {
         this.chunk = chunk;
         this.size = chunk.size;
+
+        // Moore Neighborhood offsets
+        this.offsets = [
+            {x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0},
+            {x:-1, y:-1}, {x:1, y:-1}, {x:-1, y:1}, {x:1, y:1}
+        ];
     }
 
     // Cellular Automata for Organic Biomes (Section 2.2)
@@ -43,18 +49,23 @@ export class BiomeGenerator {
         for (let y = 0; y < this.size; y++) {
             for (let x = 0; x < this.size; x++) {
                 const idx = this.chunk.getIndex(x, y);
-                const neighbors = this.getNeighbors(x, y);
 
                 // Rules for Blood Propagation
                 // If Neighbors_blood >= 3, become Blood (Liquid)
                 let bloodCount = 0;
                 let boneCount = 0;
 
-                neighbors.forEach(n => {
-                    const ni = this.chunk.getIndex(n.x, n.y);
-                    if (this.chunk.liquidLevel[ni] > 0) bloodCount++;
-                    if (this.chunk.typeMap[ni] === 3) boneCount++;
-                });
+                // Loop over neighbors without allocation
+                for (let k = 0; k < 8; k++) {
+                    const nx = x + this.offsets[k].x;
+                    const ny = y + this.offsets[k].y;
+
+                    if (nx >= 0 && nx < this.size && ny >= 0 && ny < this.size) {
+                        const ni = this.chunk.getIndex(nx, ny);
+                        if (this.chunk.liquidLevel[ni] > 0) bloodCount++;
+                        if (this.chunk.typeMap[ni] === 3) boneCount++;
+                    }
+                }
 
                 // Rule: Blood Spreads if surrounded
                 if (this.chunk.liquidLevel[idx] === 0 && bloodCount >= 3) {
@@ -75,22 +86,5 @@ export class BiomeGenerator {
 
         this.chunk.typeMap.set(nextType);
         this.chunk.liquidLevel.set(nextLiquid);
-    }
-
-    getNeighbors(x, y) {
-        const neighbors = [];
-        const dirs = [
-            {x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0},
-            {x:-1, y:-1}, {x:1, y:-1}, {x:-1, y:1}, {x:1, y:1} // Moore Neighborhood (8)
-        ];
-
-        for (let d of dirs) {
-            const nx = x + d.x;
-            const ny = y + d.y;
-            if (nx >= 0 && nx < this.size && ny >= 0 && ny < this.size) {
-                neighbors.push({x: nx, y: ny});
-            }
-        }
-        return neighbors;
     }
 }

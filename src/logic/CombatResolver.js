@@ -3,25 +3,48 @@ import { COMPONENT_TRANSFORM } from '../entities/components/Transform.js';
 import { COMPONENT_STATUS } from '../entities/components/Status.js';
 import { COMPONENT_SPRITE } from '../entities/components/Sprite.js';
 import { PROP_CORPSE, STATUS_DEAD } from '../core/Constants.js';
+import { StatsCalculator, LIMB_LEGS, LIMB_RIGHT_ARM, LIMB_LEFT_ARM, LIMB_HEAD } from './StatsCalculator.js';
 
 export class CombatResolver {
     constructor(chunk, turnManager) {
         this.chunk = chunk;
-        this.tm = turnManager; // Need ref to register corpses
-    }
-
-    getDirectionMod(attackerId, targetId) {
-        return 1.0;
+        this.tm = turnManager;
+        this.calculator = new StatsCalculator();
     }
 
     calculateDamage(attackerId, targetId, weaponPower = 10) {
-        const pa = 10;
-        const adr = 1.0;
-        let damage = pa * weaponPower * adr * 0.1; // Reduced for gameplay balance
-        return Math.max(1, Math.floor(damage));
+        // Use StatsCalculator (3.2)
+        const attackerStats = {
+            pa: COMPONENT_STATS.speed[attackerId], // Using Speed as PA proxy for Alpha
+            adr: 100, // Default ADR (Max)
+            limbs: COMPONENT_STATS.limbs[attackerId] || 0
+        };
+
+        const damage = this.calculator.calculatePhysicalDamage(attackerStats, {}, weaponPower);
+        return damage;
     }
 
     applyDamage(targetId, amount) {
+        const maxHP = COMPONENT_STATS.maxHp[targetId];
+        const currentLimbs = COMPONENT_STATS.limbs[targetId] || 0;
+
+        // 3.3. Check Limb Loss
+        const lostLimb = this.calculator.checkLimbLoss(amount, maxHP, currentLimbs);
+        if (lostLimb > 0) {
+            console.log(`Unit ${targetId} lost a limb! (${lostLimb})`);
+            COMPONENT_STATS.limbs[targetId] = currentLimbs | lostLimb;
+
+            // Immediate Gameplay Effects
+            if (lostLimb & LIMB_LEGS) {
+                // Reduce Speed drastically
+                COMPONENT_STATS.speed[targetId] = Math.max(1, Math.floor(COMPONENT_STATS.speed[targetId] / 2));
+                // TODO: Reduce Move Range in ActionSystem (needs Component flag check)
+            }
+            if (lostLimb & LIMB_HEAD) {
+                // Blindness / Accuracy penalty (TODO)
+            }
+        }
+
         COMPONENT_STATS.hp[targetId] -= amount;
 
         if (COMPONENT_STATS.hp[targetId] <= 0) {

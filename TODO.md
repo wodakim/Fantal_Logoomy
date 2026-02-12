@@ -16,9 +16,9 @@ Legende :
 
 ## Module 2: Procedural Generation
 *   🟩 **2.1. L'Algorithme "Flesh-Carver"**
-*   🔺 **2.2. Automates Cellulaires (Biomes)**
-*   🔺 **2.3. Connectivité & Validation**
-*   🔺 **2.4. Placement POI**
+*   🟩 **2.2. Automates Cellulaires (Biomes)**
+*   🟩 **2.3. Connectivité & Validation**
+*   🟩 **2.4. Placement POI**
 *   🟩 **2.5. Props Dynamiques**
 *   🟩 **2.6. Procedural Asset Generation**
 *   🔺 **2.7. Biomes Spécifiques**
