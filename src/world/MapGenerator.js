@@ -11,6 +11,7 @@ export class MapGenerator {
         let chunk;
         let valid = false;
         let attempts = 0;
+        let spawns = { player: [], enemy: [] };
 
         while (!valid && attempts < 10) {
             this.noise.seed(seed + attempts);
@@ -22,10 +23,17 @@ export class MapGenerator {
 
             // Check Connectivity
             if (this.validateConnectivity(chunk)) {
-                valid = true;
-                console.log(`Map Generated (Seed: ${seed}, Attempts: ${attempts + 1})`);
+                // Generate Spawn Points (POI)
+                spawns = this.generateSpawns(chunk);
+                if (spawns.player.length > 0 && spawns.enemy.length > 0) {
+                    valid = true;
+                    console.log(`Map Generated (Seed: ${seed}, Attempts: ${attempts + 1})`);
+                } else {
+                     console.warn(`Map Generation Failed (No Spawns) - Retrying...`);
+                     attempts++;
+                }
             } else {
-                console.warn(`Map Generation Failed (Attempt ${attempts + 1}) - Retrying...`);
+                console.warn(`Map Generation Failed (Connectivity) - Retrying...`);
                 attempts++;
             }
         }
@@ -34,7 +42,7 @@ export class MapGenerator {
             console.error("Failed to generate a valid map after 10 attempts. Returning last attempt.");
         }
 
-        return chunk;
+        return { chunk, spawns };
     }
 
     generateHeightMap(size) {
@@ -79,18 +87,8 @@ export class MapGenerator {
 
         // 1. Find a valid start node (Not water, Not blocked prop)
         for (let i = 0; i < size * size; i++) {
-            const h = chunk.heightMap[i];
             const obj = chunk.objIndex[i];
-            // Treat Water (Type 2) and High Walls as non-walkable for spawn logic?
-            // Actually, let's assume standard walk logic:
-            // Walkable if not a blocking Prop.
-            // But we need to check if we can reach most other tiles.
-
-            // Count total potentially walkable tiles
-            // Assume Water is walkable but slow? Or deep water blocks?
-            // Let's assume Deep Water (h<=1) is walkable for now but discouraged.
-            // Let's count non-blocked tiles.
-            // Actually, let's just pick the first non-obstacle tile.
+            // Treat Water (Type 2) as walkable but slow.
             if (obj === 0) { // No prop
                 if (!startNode) startNode = { x: i % size, y: Math.floor(i / size) };
                 totalWalkable++;
@@ -144,5 +142,64 @@ export class MapGenerator {
         console.log(`Map Connectivity: ${(ratio * 100).toFixed(1)}% (${reached}/${totalWalkable})`);
 
         return ratio >= 0.80;
+    }
+
+    // Identify POI (Points of Interest) for Spawns
+    generateSpawns(chunk) {
+        const size = chunk.size;
+        const playerSpawns = [];
+        const enemySpawns = [];
+
+        let avgHeight = 0;
+        for (let i=0; i<chunk.area; i++) avgHeight += chunk.heightMap[i];
+        avgHeight /= chunk.area;
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const i = chunk.getIndex(x, y);
+                // Cannot spawn on props or deep liquid/water?
+                if (chunk.objIndex[i] > 0) continue;
+                if (chunk.typeMap[i] === 2) continue; // Avoid spawning on Water
+
+                const h = chunk.heightMap[i];
+
+                // Player Spawn: Low Ground / Flat (Blue Zone)
+                if (h <= avgHeight && h > 1) {
+                    // Check Flatness (Variance with neighbors)
+                    if (this.isFlat(chunk, x, y)) {
+                        playerSpawns.push({x, y, z: h});
+                    }
+                }
+
+                // Enemy Spawn: High Ground (Red Zone)
+                if (h > avgHeight + 1) {
+                    enemySpawns.push({x, y, z: h});
+                }
+            }
+        }
+
+        // Sort Player Spawns by distance to edge? Or random?
+        // Sort Enemy Spawns by height (highest first)
+        enemySpawns.sort((a, b) => b.z - a.z);
+
+        // Fallback if no specific spawns found
+        if (playerSpawns.length === 0) playerSpawns.push({x:0, y:0, z: chunk.heightMap[0]});
+        if (enemySpawns.length === 0) enemySpawns.push({x:15, y:15, z: chunk.heightMap[chunk.getIndex(15,15)]});
+
+        return { player: playerSpawns, enemy: enemySpawns };
+    }
+
+    isFlat(chunk, x, y) {
+        const h = chunk.heightMap[chunk.getIndex(x, y)];
+        const neighbors = [
+             {x:x+1, y:y}, {x:x-1, y:y}, {x:x, y:y+1}, {x:x, y:y-1}
+        ];
+        let variance = 0;
+        for(let n of neighbors) {
+            if(n.x>=0 && n.x<chunk.size && n.y>=0 && n.y<chunk.size) {
+                 variance += Math.abs(chunk.heightMap[chunk.getIndex(n.x, n.y)] - h);
+            }
+        }
+        return variance <= 1;
     }
 }

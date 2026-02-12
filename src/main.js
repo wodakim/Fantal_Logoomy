@@ -51,7 +51,10 @@ Promise.all([
 
 function initGame() {
     // 1. Generate World
-    GAME.chunk = mapGen.generate(Math.random() * 1000);
+    const mapData = mapGen.generate(Math.random() * 1000);
+    GAME.chunk = mapData.chunk;
+    const spawns = mapData.spawns;
+
     fluidEngine = new FluidEngine(GAME.chunk);
     input.currentChunk = GAME.chunk;
 
@@ -59,7 +62,9 @@ function initGame() {
     GAME.em = new EntityManager();
     GAME.lootCollected = [];
 
-    // Hero
+    // Hero (Spawn at first valid Player POI)
+    const pSpawn = spawns.player[0] || {x:8, y:8, z:0};
+
     const savedData = saveSystem.load();
     GAME.heroId = GAME.em.createEntity();
 
@@ -75,22 +80,26 @@ function initGame() {
         COMPONENT_STATS.speed[GAME.heroId] = 12;
     }
 
-    COMPONENT_TRANSFORM.x[GAME.heroId] = 8;
-    COMPONENT_TRANSFORM.y[GAME.heroId] = 8;
-    COMPONENT_TRANSFORM.z[GAME.heroId] = GAME.chunk.heightMap[GAME.chunk.getIndex(8,8)];
+    COMPONENT_TRANSFORM.x[GAME.heroId] = pSpawn.x;
+    COMPONENT_TRANSFORM.y[GAME.heroId] = pSpawn.y;
+    COMPONENT_TRANSFORM.z[GAME.heroId] = GAME.chunk.heightMap[GAME.chunk.getIndex(pSpawn.x, pSpawn.y)];
     COMPONENT_SPRITE.active[GAME.heroId] = 1;
     COMPONENT_SPRITE.spriteId[GAME.heroId] = 0;
 
-    // Enemy
-    const enemyId = GAME.em.createEntity();
-    COMPONENT_STATS.maxHp[enemyId] = 50;
-    COMPONENT_STATS.hp[enemyId] = 50;
-    COMPONENT_STATS.speed[enemyId] = 8;
-    COMPONENT_TRANSFORM.x[enemyId] = 10;
-    COMPONENT_TRANSFORM.y[enemyId] = 10;
-    COMPONENT_TRANSFORM.z[enemyId] = GAME.chunk.heightMap[GAME.chunk.getIndex(10,10)];
-    COMPONENT_SPRITE.active[enemyId] = 1;
-    COMPONENT_SPRITE.spriteId[enemyId] = 1;
+    // Enemies (Spawn at Enemy POIs, max 3 for Alpha)
+    const enemyCount = Math.min(3, spawns.enemy.length);
+    for(let i=0; i<enemyCount; i++) {
+        const eSpawn = spawns.enemy[i];
+        const enemyId = GAME.em.createEntity();
+        COMPONENT_STATS.maxHp[enemyId] = 50;
+        COMPONENT_STATS.hp[enemyId] = 50;
+        COMPONENT_STATS.speed[enemyId] = 8;
+        COMPONENT_TRANSFORM.x[enemyId] = eSpawn.x;
+        COMPONENT_TRANSFORM.y[enemyId] = eSpawn.y;
+        COMPONENT_TRANSFORM.z[enemyId] = GAME.chunk.heightMap[GAME.chunk.getIndex(eSpawn.x, eSpawn.y)];
+        COMPONENT_SPRITE.active[enemyId] = 1;
+        COMPONENT_SPRITE.spriteId[enemyId] = 1;
+    }
 
     // 3. Logic Systems
     turnManager = new TurnManager(GAME.em, GAME.chunk);
