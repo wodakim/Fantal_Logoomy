@@ -1,6 +1,7 @@
 import { COMPONENT_STATS } from '../entities/components/Stats.js';
 import { COMPONENT_STATUS } from '../entities/components/Status.js';
-import { PROP_LOOT_BAG, STATUS_DEAD } from '../core/Constants.js';
+import { PROP_LOOT_BAG, STATUS_DEAD, PROP_CORPSE } from '../core/Constants.js';
+import { COMPONENT_TRANSFORM } from '../entities/components/Transform.js';
 
 export class TurnManager {
     constructor(entityManager, chunk) {
@@ -21,7 +22,7 @@ export class TurnManager {
     }
 
     registerCorpse(x, y, timer) {
-        this.corpses.push({ x, y, timer });
+        this.corpses.push({ x, y, timer, processed: false });
     }
 
     tick() {
@@ -101,8 +102,9 @@ export class TurnManager {
         this.turnState.acted = false;
 
         this.corpses.forEach(c => {
+            if (c.processed) return;
             if (c.timer > 0) c.timer--;
-            if (c.timer === 0 && !c.processed) {
+            if (c.timer === 0) {
                 c.processed = true;
                 this.transformCorpseToLoot(c.x, c.y);
             }
@@ -113,7 +115,10 @@ export class TurnManager {
 
     transformCorpseToLoot(x, y) {
         const idx = this.chunk.getIndex(x, y);
-        this.chunk.objIndex[idx] = PROP_LOOT_BAG;
+        // Only if still a corpse (e.g. not devoured)
+        if (this.chunk.objIndex[idx] === PROP_CORPSE) {
+            this.chunk.objIndex[idx] = PROP_LOOT_BAG;
+        }
     }
 
     endTurn(unitId) {
@@ -141,5 +146,27 @@ export class TurnManager {
 
     recordAction() {
         this.turnState.acted = true;
+    }
+
+    // Helper for UI
+    checkForNearbyCorpse(unitId) {
+        const x = COMPONENT_TRANSFORM.x[unitId];
+        const y = COMPONENT_TRANSFORM.y[unitId];
+
+        // Check Self
+        const idx = this.chunk.getIndex(x, y);
+        if (this.chunk.objIndex[idx] === PROP_CORPSE) return true;
+
+        // Check Neighbors
+        const neighbors = [{x:0,y:-1}, {x:0,y:1}, {x:-1,y:0}, {x:1,y:0}];
+        for (let n of neighbors) {
+            const nx = x + n.x;
+            const ny = y + n.y;
+            if (nx>=0 && nx<this.chunk.size && ny>=0 && ny<this.chunk.size) {
+                const ni = this.chunk.getIndex(nx, ny);
+                if (this.chunk.objIndex[ni] === PROP_CORPSE) return true;
+            }
+        }
+        return false;
     }
 }

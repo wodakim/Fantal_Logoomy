@@ -1,3 +1,5 @@
+import { ActionSystem } from '../logic/ActionSystem.js'; // To access check functions if needed, or we delegate to TM
+
 export class CombatOverlay {
     constructor(turnManager) {
         this.tm = turnManager;
@@ -10,6 +12,7 @@ export class CombatOverlay {
         this.onAttackClicked = null; // Standard Attack
         this.onSkillClicked = null;  // New: Skill selected
         this.onWaitClicked = null;
+        this.onDevourClicked = null; // New: Cannibalize
 
         this.skillSystem = null; // To be linked
     }
@@ -64,6 +67,16 @@ export class CombatOverlay {
              if (this.onAttackClicked) this.onAttackClicked(unitId);
         });
 
+        // DEVOUR (Contextual)
+        // Check if there is a corpse nearby via TurnManager helper
+        if (this.tm.checkForNearbyCorpse(unitId)) {
+             this.createButton('DEVOUR', () => {
+                 this.menu.remove();
+                 this.menu = null;
+                 if (this.onDevourClicked) this.onDevourClicked(unitId);
+             }, '#8a0303'); // Red button for Gore action
+        }
+
         // Job Skills
         if (this.skillSystem) {
             const skills = this.skillSystem.getUnitSkills(unitId);
@@ -79,13 +92,13 @@ export class CombatOverlay {
         this.createButton('BACK', () => this.showActionMenu(unitId));
     }
 
-    createButton(text, callback) {
+    createButton(text, callback, bgColor = 'rgba(50, 0, 0, 0.9)') {
         const btn = document.createElement('button');
         btn.innerText = text;
         btn.className = 'ui-interactive';
         Object.assign(btn.style, {
             padding: '12px 24px',
-            background: 'rgba(50, 0, 0, 0.9)',
+            background: bgColor,
             border: '1px solid #8a0303',
             color: '#e0e0e0',
             fontSize: '16px',

@@ -1,7 +1,7 @@
 import { COMPONENT_TRANSFORM } from '../entities/components/Transform.js';
 import { COMPONENT_STATS } from '../entities/components/Stats.js';
 import { COMPONENT_STATUS } from '../entities/components/Status.js';
-import { PROP_ROCK, PROP_TREE, PROP_LOOT_BAG } from '../core/Constants.js';
+import { PROP_ROCK, PROP_TREE, PROP_LOOT_BAG, PROP_CORPSE } from '../core/Constants.js';
 import { ITEMS } from '../data/Items.js';
 
 export class ActionSystem {
@@ -122,5 +122,53 @@ export class ActionSystem {
         const dmg = this.combatResolver.calculateDamage(attackerId, targetId);
         this.combatResolver.applyDamage(targetId, dmg, attackerId);
         return dmg;
+    }
+
+    // Module 5.5: Cannibalize
+    performDevour(unitId) {
+        const x = COMPONENT_TRANSFORM.x[unitId];
+        const y = COMPONENT_TRANSFORM.y[unitId];
+        let targetIdx = -1;
+
+        // Check center (priority)
+        const idx = this.chunk.getIndex(x, y);
+        if (this.chunk.objIndex[idx] === PROP_CORPSE) {
+            targetIdx = idx;
+        } else {
+            // Check neighbors
+            const neighbors = [{x:0,y:-1}, {x:0,y:1}, {x:-1,y:0}, {x:1,y:0}];
+            for (let n of neighbors) {
+                const nx = x + n.x;
+                const ny = y + n.y;
+                if (nx>=0 && nx<this.chunk.size && ny>=0 && ny<this.chunk.size) {
+                    const ni = this.chunk.getIndex(nx, ny);
+                    if (this.chunk.objIndex[ni] === PROP_CORPSE) {
+                        targetIdx = ni;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (targetIdx !== -1) {
+            // Remove Corpse
+            this.chunk.objIndex[targetIdx] = 0;
+
+            // Heal (25% MaxHP)
+            const maxHp = COMPONENT_STATS.maxHp[unitId];
+            const healAmount = Math.floor(maxHp * 0.25);
+            COMPONENT_STATS.hp[unitId] = Math.min(maxHp, COMPONENT_STATS.hp[unitId] + healAmount);
+
+            // Give Loot (Viscera)
+            if (this.inventorySystem) {
+                // 901: Flesh Scraps, 902: Intact Heart
+                const viscera = (Math.random() < 0.3) ? 902 : 901;
+                this.inventorySystem.addItem(viscera);
+                return { healed: healAmount, item: ITEMS[viscera].name };
+            }
+
+            return { healed: healAmount, item: "Viscera" };
+        }
+        return null;
     }
 }
