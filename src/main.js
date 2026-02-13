@@ -124,18 +124,46 @@ function initGame() {
             const ux = COMPONENT_TRANSFORM.x[unitId];
             const uy = COMPONENT_TRANSFORM.y[unitId];
 
-            const path = pathfinder.findPath(ux, uy, tx, ty, 2);
+            let moved = false;
+            let attacked = false;
 
+            // 1. Move
+            const path = pathfinder.findPath(ux, uy, tx, ty, 2);
             if (path && path.length > 1) {
-                const dest = path[path.length - 2];
-                actionSystem.moveUnit(unitId, dest.x, dest.y);
+                // Determine step (Naive: just 1 step for now or path[length-2] if close?)
+                // Actually pathfinder returns full path. path[0] is start. path[length-1] is target.
+                // We want to move towards target but within move range.
+                // For Alpha, let's just take one step towards player if far, or adjacent if close.
+                // Simplified: Just try to move to the tile before the target if valid
+
+                // Let's find the furthest reachable tile on the path
+                // For now, keep the original simple logic: move to adjacent of target if possible?
+                // Or just move 1 step along path?
+                const nextStep = path[1]; // First step after start
+                if (nextStep && (nextStep.x !== tx || nextStep.y !== ty)) {
+                     // Check if nextStep is valid move (ActionSystem does check but let's assume pathfinder is correct-ish)
+                     // Actually ActionSystem.moveUnit doesn't check range, it just moves.
+                     // We should trust pathfinder.
+                     actionSystem.moveUnit(unitId, nextStep.x, nextStep.y);
+                     moved = true;
+                }
             }
 
-            const dmg = actionSystem.performAttack(unitId, targetId);
-            if (dmg) {
-                const h = GAME.chunk.heightMap[GAME.chunk.getIndex(tx, ty)];
-                const scr = isoToScreen(tx, ty, h, renderer.camX, renderer.camY);
-                ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
+            // 2. Attack
+            // Check distance
+            const dist = Math.abs(COMPONENT_TRANSFORM.x[unitId] - tx) + Math.abs(COMPONENT_TRANSFORM.y[unitId] - ty);
+            if (dist <= 1) {
+                const dmg = actionSystem.performAttack(unitId, targetId);
+                if (dmg) {
+                    const h = GAME.chunk.heightMap[GAME.chunk.getIndex(tx, ty)];
+                    const scr = isoToScreen(tx, ty, h, renderer.camX, renderer.camY);
+                    ui.showFloatingText(scr.x, scr.y, `-${dmg}`, '#ff0000');
+                    attacked = true;
+                }
+            }
+
+            if (!moved && !attacked) {
+                console.log(`AI (Unit ${unitId}) waiting...`);
             }
 
             setTimeout(() => turnManager.endTurn(unitId), 1000);
@@ -241,7 +269,14 @@ function setupInput() {
         }
 
         if (gameState === 'MOVE_SELECTION') {
-            if (!isValid) { cursor = null; return; }
+            if (!isValid) {
+                // Cancel Move
+                cursor = null;
+                gameState = 'IDLE';
+                highlightedTiles = [];
+                ui.showActionMenu(activeUnit);
+                return;
+            }
             if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
                 cursor = { x: pos.x, y: pos.y };
             } else {
@@ -253,7 +288,14 @@ function setupInput() {
             }
         }
         else if (gameState === 'ATTACK_SELECTION') {
-            if (!isValid) { cursor = null; return; }
+            if (!isValid) {
+                // Cancel Attack
+                cursor = null;
+                gameState = 'IDLE';
+                highlightedTiles = [];
+                ui.showActionMenu(activeUnit);
+                return;
+            }
             if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
                 cursor = { x: pos.x, y: pos.y };
             } else {

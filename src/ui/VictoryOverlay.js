@@ -9,7 +9,7 @@ export class VictoryOverlay {
         if (this.panel) this.panel.remove();
 
         this.panel = document.createElement('div');
-        this.panel.className = 'victory-overlay glass-panel';
+        this.panel.className = 'victory-overlay glass-panel ui-interactive'; // Added ui-interactive
 
         Object.assign(this.panel.style, {
             position: 'absolute',
@@ -22,9 +22,10 @@ export class VictoryOverlay {
             display: 'flex',
             flexDirection: 'column',
             gap: '15px',
-            zIndex: 100,
+            zIndex: 200, // Increased Z-Index to be above everything
             background: 'rgba(0, 0, 0, 0.95)',
-            border: '2px solid #c5a059'
+            border: '2px solid #c5a059',
+            pointerEvents: 'auto' // Force pointer events
         });
 
         const title = document.createElement('h1');
@@ -48,6 +49,7 @@ export class VictoryOverlay {
 
         const btn = document.createElement('button');
         btn.innerText = result === "VICTORY" ? "NEXT BATTLE" : "RETRY";
+        btn.className = 'ui-interactive'; // Added ui-interactive
         Object.assign(btn.style, {
             padding: '10px 20px',
             fontSize: '18px',
@@ -55,12 +57,21 @@ export class VictoryOverlay {
             background: '#8a0303',
             color: 'white',
             border: 'none',
-            marginTop: '10px'
+            marginTop: '10px',
+            pointerEvents: 'auto'
         });
-        btn.onclick = () => {
+
+        // Use touchstart to bypass any canvas capture issues on mobile
+        const handleAction = (e) => {
+            if(e) e.stopPropagation();
             this.panel.remove();
+            this.panel = null; // Clear reference
             if (this.onNextBattle) this.onNextBattle();
         };
+
+        btn.addEventListener('touchstart', handleAction);
+        btn.onclick = handleAction;
+
         this.panel.appendChild(btn);
 
         this.root.appendChild(this.panel);
