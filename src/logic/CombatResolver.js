@@ -24,7 +24,7 @@ export class CombatResolver {
         return damage;
     }
 
-    applyDamage(targetId, amount) {
+    applyDamage(targetId, amount, attackerId = -1) {
         const maxHP = COMPONENT_STATS.maxHp[targetId];
         const currentLimbs = COMPONENT_STATS.limbs[targetId] || 0;
 
@@ -38,19 +38,34 @@ export class CombatResolver {
             if (lostLimb & LIMB_LEGS) {
                 // Reduce Speed drastically
                 COMPONENT_STATS.speed[targetId] = Math.max(1, Math.floor(COMPONENT_STATS.speed[targetId] / 2));
-                // TODO: Reduce Move Range in ActionSystem (needs Component flag check)
-            }
-            if (lostLimb & LIMB_HEAD) {
-                // Blindness / Accuracy penalty (TODO)
             }
         }
 
         COMPONENT_STATS.hp[targetId] -= amount;
 
+        // XP Gain on Hit
+        if (attackerId !== -1 && COMPONENT_STATS.hp[targetId] > 0) {
+            this.awardExperience(attackerId, 10);
+        }
+
         if (COMPONENT_STATS.hp[targetId] <= 0) {
             COMPONENT_STATS.hp[targetId] = 0;
+            if (attackerId !== -1) {
+                this.awardExperience(attackerId, 40); // Kill Bonus
+            }
             this.killUnit(targetId);
         }
+    }
+
+    awardExperience(unitId, amount) {
+        // Mock current EXP since not in component yet
+        // In real impl, read from COMPONENT_STATS.exp[unitId]
+        // For Alpha visualization:
+        console.log(`Unit ${unitId} gains ${amount} XP`);
+
+        // Check Level Up (Mock)
+        // const result = this.calculator.gainExperience(currentExp, amount);
+        // if (result.levelUp) ...
     }
 
     killUnit(unitId) {

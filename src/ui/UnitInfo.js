@@ -30,6 +30,18 @@ export class UnitInfo {
         const hpPct = (stats.hp[unitId] / stats.maxHp[unitId]) * 100 || 0;
         const ctPct = stats.ct[unitId];
 
+        // Analyze Limbs
+        const limbs = stats.limbs ? stats.limbs[unitId] : 0;
+        let injuries = [];
+        if (limbs & 1) injuries.push("L.ARM");
+        if (limbs & 2) injuries.push("R.ARM");
+        if (limbs & 4) injuries.push("LEGS");
+        if (limbs & 8) injuries.push("HEAD");
+
+        const injuryHtml = injuries.length > 0
+            ? `<div style="color:#e74c3c; font-size:12px; margin-top:5px;">⚠️ CRITICAL: ${injuries.join(", ")}</div>`
+            : "";
+
         this.content.innerHTML = `
             <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:5px;">
                 <span style="font-weight:bold; color:#c5a059;">UNIT ${unitId}</span>
@@ -49,6 +61,7 @@ export class UnitInfo {
                     </div>
                 </div>
             </div>
+            ${injuryHtml}
         `;
     }
 
