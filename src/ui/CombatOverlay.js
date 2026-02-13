@@ -34,8 +34,16 @@ export class CombatOverlay {
         title.style.color = '#c5a059';
         this.menu.appendChild(title);
 
-        this.createButton('MOVE', () => this.onMoveClicked && this.onMoveClicked(unitId));
-        this.createButton('ACT', () => this.showActSubMenu(unitId));
+        // Only show MOVE if unit hasn't moved yet
+        if (this.tm.canMove()) {
+            this.createButton('MOVE', () => this.onMoveClicked && this.onMoveClicked(unitId));
+        }
+
+        // Only show ACT if unit hasn't acted yet
+        if (this.tm.canAct()) {
+            this.createButton('ACT', () => this.showActSubMenu(unitId));
+        }
+
         this.createButton('WAIT', () => this.onWaitClicked && this.onWaitClicked(unitId));
 
         this.root.appendChild(this.menu);

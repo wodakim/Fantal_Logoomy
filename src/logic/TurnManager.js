@@ -12,6 +12,12 @@ export class TurnManager {
         this.onBattleEnd = null; // Callback for Victory/Defeat
 
         this.corpses = [];
+
+        // Turn State (AP Logic)
+        this.turnState = {
+            moved: false,
+            acted: false
+        };
     }
 
     registerCorpse(x, y, timer) {
@@ -90,6 +96,10 @@ export class TurnManager {
     startTurn(unitId) {
         this.activeUnit = unitId;
 
+        // Reset Turn State
+        this.turnState.moved = false;
+        this.turnState.acted = false;
+
         this.corpses.forEach(c => {
             if (c.timer > 0) c.timer--;
             if (c.timer === 0 && !c.processed) {
@@ -108,7 +118,28 @@ export class TurnManager {
 
     endTurn(unitId) {
         if (this.activeUnit !== unitId) return;
+
+        // Calculate CT usage? For now full reset.
         COMPONENT_STATS.ct[unitId] = 0;
+
         this.activeUnit = null;
+        // Turn state is reset in startTurn next time
+    }
+
+    // Actions
+    canMove() {
+        return !this.turnState.moved;
+    }
+
+    canAct() {
+        return !this.turnState.acted;
+    }
+
+    recordMove() {
+        this.turnState.moved = true;
+    }
+
+    recordAction() {
+        this.turnState.acted = true;
     }
 }

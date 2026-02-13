@@ -292,11 +292,28 @@ function setupInput() {
             if (!cursor || cursor.x !== pos.x || cursor.y !== pos.y) {
                 cursor = { x: pos.x, y: pos.y };
             } else {
-                actionSystem.moveUnit(activeUnit, pos.x, pos.y);
+                const lootedItem = actionSystem.moveUnit(activeUnit, pos.x, pos.y);
+
+                // Show loot popup if applicable
+                if (lootedItem) {
+                    const h = GAME.chunk.heightMap[GAME.chunk.getIndex(pos.x, pos.y)];
+                    const scr = isoToScreen(pos.x, pos.y, h, renderer.camX, renderer.camY);
+                    ui.showFloatingText(scr.x, scr.y, `Found: ${lootedItem}`, '#f1c40f');
+                }
+
+                // Record Move in TurnManager (Action Points)
+                turnManager.recordMove();
+
                 gameState = 'IDLE';
                 highlightedTiles = [];
                 cursor = null;
-                ui.showActionMenu(activeUnit);
+
+                // Check if turn should end or show menu again
+                if (turnManager.canAct()) {
+                    ui.showActionMenu(activeUnit);
+                } else {
+                    turnManager.endTurn(activeUnit);
+                }
             }
         }
         else if (gameState === 'ATTACK_SELECTION') {
@@ -329,9 +346,15 @@ function setupInput() {
                     const h = GAME.chunk.heightMap[GAME.chunk.getIndex(pos.x, pos.y)];
                     const scr = isoToScreen(pos.x, pos.y, h, renderer.camX, renderer.camY);
                     ui.showFloatingText(scr.x, scr.y, txt, color);
+
+                    // Record Action
+                    turnManager.recordAction();
+
                     gameState = 'IDLE';
                     highlightedTiles = [];
                     cursor = null;
+
+                    // End turn immediately after action (standard tactic logic)
                     turnManager.endTurn(activeUnit);
                 }
             }

@@ -2,6 +2,7 @@ import { COMPONENT_TRANSFORM } from '../entities/components/Transform.js';
 import { COMPONENT_STATS } from '../entities/components/Stats.js';
 import { COMPONENT_STATUS } from '../entities/components/Status.js';
 import { PROP_ROCK, PROP_TREE, PROP_LOOT_BAG } from '../core/Constants.js';
+import { ITEMS } from '../data/Items.js';
 
 export class ActionSystem {
     constructor(chunk, entityManager, combatResolver, inventorySystem) {
@@ -91,6 +92,8 @@ export class ActionSystem {
         const idx = this.chunk.getIndex(targetX, targetY);
         COMPONENT_TRANSFORM.z[unitId] = this.chunk.heightMap[idx];
 
+        let lootedItemName = null;
+
         // Loot Check
         if (this.chunk.objIndex[idx] === PROP_LOOT_BAG) {
             console.log(`Unit ${unitId} picked up LOOT!`);
@@ -99,8 +102,11 @@ export class ActionSystem {
             if (this.inventorySystem) {
                 // Mock random item ID: 101, 102, 104, 201
                 const lootTable = [101, 102, 104, 201];
-                const item = lootTable[Math.floor(Math.random() * lootTable.length)];
-                this.inventorySystem.addItem(item);
+                const itemId = lootTable[Math.floor(Math.random() * lootTable.length)];
+                this.inventorySystem.addItem(itemId);
+
+                const item = ITEMS[itemId];
+                if (item) lootedItemName = item.name;
             }
 
             // Remove Bag
@@ -108,6 +114,7 @@ export class ActionSystem {
         }
 
         console.log(`Unit ${unitId} moved to ${targetX}, ${targetY}`);
+        return lootedItemName;
     }
 
     performAttack(attackerId, targetId) {
