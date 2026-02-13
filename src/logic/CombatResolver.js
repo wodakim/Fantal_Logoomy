@@ -6,13 +6,21 @@ import { PROP_CORPSE, STATUS_DEAD } from '../core/Constants.js';
 import { StatsCalculator, LIMB_LEGS, LIMB_RIGHT_ARM, LIMB_LEFT_ARM, LIMB_HEAD } from './StatsCalculator.js';
 
 export class CombatResolver {
-    constructor(chunk, turnManager) {
+    constructor(chunk, turnManager, inventorySystem) {
         this.chunk = chunk;
         this.tm = turnManager;
+        this.inventory = inventorySystem; // Store reference
         this.calculator = new StatsCalculator();
     }
 
     calculateDamage(attackerId, targetId, weaponPower = 10) {
+        // Retrieve weapon power from inventory if available and if attacker is the Hero (Unit 0 usually)
+        // For Alpha, only Hero has inventory.
+        if (attackerId === 0 && this.inventory) {
+            const wp = this.inventory.getWeaponPower();
+            if (wp > 0) weaponPower = wp;
+        }
+
         // Use StatsCalculator (3.2)
         const attackerStats = {
             pa: COMPONENT_STATS.speed[attackerId], // Using Speed as PA proxy for Alpha
@@ -58,14 +66,29 @@ export class CombatResolver {
     }
 
     awardExperience(unitId, amount) {
-        // Mock current EXP since not in component yet
-        // In real impl, read from COMPONENT_STATS.exp[unitId]
-        // For Alpha visualization:
-        console.log(`Unit ${unitId} gains ${amount} XP`);
+        // Assume simplified XP model for Alpha (stored in Speed or temp var)
+        // Since we don't have a dedicated exp array in COMPONENT_STATS yet (unless I missed it being added),
+        // we will mock the "read" and just log it.
+        // If exp array exists, we use it.
+        let currentExp = COMPONENT_STATS.exp ? COMPONENT_STATS.exp[unitId] : 0;
+        const result = this.calculator.gainExperience(currentExp, amount);
 
-        // Check Level Up (Mock)
-        // const result = this.calculator.gainExperience(currentExp, amount);
-        // if (result.levelUp) ...
+        if (COMPONENT_STATS.exp) COMPONENT_STATS.exp[unitId] = result.exp;
+
+        console.log(`Unit ${unitId} gains ${amount} XP (Total: ${result.exp})`);
+
+        if (result.levelUp) {
+            console.log(`Unit ${unitId} LEVELED UP!`);
+            // Apply Growth
+            // For now, assume Level 1 -> 2. In real game, store Level component.
+            // Mock Level:
+            let level = 1;
+            const newStats = this.calculator.calculateStatsForLevel(level + 1, 'FLESH_CARVER');
+
+            COMPONENT_STATS.maxHp[unitId] = newStats.maxHp;
+            COMPONENT_STATS.hp[unitId] = newStats.maxHp; // Full heal on level up?
+            COMPONENT_STATS.speed[unitId] = newStats.speed;
+        }
     }
 
     killUnit(unitId) {

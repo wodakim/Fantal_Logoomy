@@ -4,10 +4,11 @@ import { COMPONENT_STATUS } from '../entities/components/Status.js';
 import { PROP_ROCK, PROP_TREE, PROP_LOOT_BAG } from '../core/Constants.js';
 
 export class ActionSystem {
-    constructor(chunk, entityManager, combatResolver) {
+    constructor(chunk, entityManager, combatResolver, inventorySystem) {
         this.chunk = chunk;
         this.em = entityManager;
         this.combatResolver = combatResolver;
+        this.inventorySystem = inventorySystem;
     }
 
     getMovementRange(unitId) {
@@ -93,7 +94,15 @@ export class ActionSystem {
         // Loot Check
         if (this.chunk.objIndex[idx] === PROP_LOOT_BAG) {
             console.log(`Unit ${unitId} picked up LOOT!`);
-            // Add item to inventory (TODO)
+
+            // Random Loot Logic
+            if (this.inventorySystem) {
+                // Mock random item ID: 101, 102, 104, 201
+                const lootTable = [101, 102, 104, 201];
+                const item = lootTable[Math.floor(Math.random() * lootTable.length)];
+                this.inventorySystem.addItem(item);
+            }
+
             // Remove Bag
             this.chunk.objIndex[idx] = 0;
         }
@@ -104,7 +113,7 @@ export class ActionSystem {
     performAttack(attackerId, targetId) {
         if (!this.combatResolver) return;
         const dmg = this.combatResolver.calculateDamage(attackerId, targetId);
-        this.combatResolver.applyDamage(targetId, dmg);
+        this.combatResolver.applyDamage(targetId, dmg, attackerId);
         return dmg;
     }
 }

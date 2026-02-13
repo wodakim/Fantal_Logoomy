@@ -18,11 +18,13 @@ import { SkillSystem } from './logic/SkillSystem.js';
 import { Pathfinding } from './logic/Pathfinding.js';
 import { SaveSystem } from './core/SaveSystem.js';
 import { isoToScreen } from './math/Isometric.js';
+import { InventorySystem } from './logic/InventorySystem.js';
 
 console.log("Initializing VERMILION...");
 
 const renderer = new Renderer('game-canvas');
 const saveSystem = new SaveSystem();
+const inventorySystem = new InventorySystem();
 
 // Global Game State Container
 const GAME = {
@@ -68,6 +70,16 @@ function initGame() {
     const savedData = saveSystem.load();
     GAME.heroId = GAME.em.createEntity();
 
+    // Restore Inventory
+    if (savedData) {
+        inventorySystem.loadState(savedData);
+    }
+    // Debug: Give starting weapon if empty
+    if (inventorySystem.inventory.length === 0 && !inventorySystem.equipment.mainHand) {
+        inventorySystem.addItem(101); // Shiv
+        inventorySystem.equipItem(101);
+    }
+
     // Restore or Init Stats
     if (savedData && savedData.hero) {
         COMPONENT_STATS.hp[GAME.heroId] = savedData.hero.hp;
@@ -105,8 +117,8 @@ function initGame() {
     turnManager = new TurnManager(GAME.em, GAME.chunk);
     ui = new CombatOverlay(turnManager);
     unitInfo = new UnitInfo();
-    combatResolver = new CombatResolver(GAME.chunk, turnManager);
-    actionSystem = new ActionSystem(GAME.chunk, GAME.em, combatResolver);
+    combatResolver = new CombatResolver(GAME.chunk, turnManager, inventorySystem);
+    actionSystem = new ActionSystem(GAME.chunk, GAME.em, combatResolver, inventorySystem);
     skillSystem = new SkillSystem(actionSystem);
     skillSystem.loadDefinitions();
     ui.skillSystem = skillSystem;
