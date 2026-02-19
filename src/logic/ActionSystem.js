@@ -86,13 +86,57 @@ export class ActionSystem {
         return tiles;
     }
 
+    _isEnemyPair(aId, bId) {
+        return (aId === 0 && bId > 0) || (aId > 0 && bId === 0);
+    }
+
+    _findReactionAttacker(moverId, fromX, fromY, toX, toY) {
+        const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+        const fromSet = new Set();
+        const toSet = new Set();
+
+        for (const d of dirs) {
+            const fx = fromX + d.x;
+            const fy = fromY + d.y;
+            if (fx >= 0 && fx < this.chunk.size && fy >= 0 && fy < this.chunk.size) fromSet.add(`${fx},${fy}`);
+
+            const tx = toX + d.x;
+            const ty = toY + d.y;
+            if (tx >= 0 && tx < this.chunk.size && ty >= 0 && ty < this.chunk.size) toSet.add(`${tx},${ty}`);
+        }
+
+        // Find enemy adjacent before move but not after move (leaving melee range)
+        for (let id = 0; id < this.em.activeMap.length; id++) {
+            if (!this.em.activeMap[id] || id === moverId) continue;
+            if (!this._isEnemyPair(id, moverId)) continue;
+            if (COMPONENT_STATS.hp[id] <= 0) continue;
+
+            const ex = COMPONENT_TRANSFORM.x[id];
+            const ey = COMPONENT_TRANSFORM.y[id];
+            const key = `${ex},${ey}`;
+            if (fromSet.has(key) && !toSet.has(key)) return id;
+        }
+
+        return -1;
+    }
+
     moveUnit(unitId, targetX, targetY) {
+        const prevX = COMPONENT_TRANSFORM.x[unitId];
+        const prevY = COMPONENT_TRANSFORM.y[unitId];
+        const reactionAttackerId = this._findReactionAttacker(unitId, prevX, prevY, targetX, targetY);
+
         COMPONENT_TRANSFORM.x[unitId] = targetX;
         COMPONENT_TRANSFORM.y[unitId] = targetY;
+
+        const dx = targetX - prevX;
+        const dy = targetY - prevY;
+        if (Math.abs(dx) > Math.abs(dy) && dx !== 0) COMPONENT_TRANSFORM.dir[unitId] = dx > 0 ? 1 : 3;
+        else if (dy !== 0) COMPONENT_TRANSFORM.dir[unitId] = dy > 0 ? 2 : 0;
         const idx = this.chunk.getIndex(targetX, targetY);
         COMPONENT_TRANSFORM.z[unitId] = this.chunk.heightMap[idx];
 
         let lootedItemName = null;
+        let reactionDamage = 0;
 
         // Loot Check
         if (this.chunk.objIndex[idx] === PROP_LOOT_BAG) {
@@ -113,13 +157,29 @@ export class ActionSystem {
             this.chunk.objIndex[idx] = 0;
         }
 
+        if (reactionAttackerId !== -1 && this.combatResolver) {
+            reactionDamage = this.combatResolver.calculateDamage(reactionAttackerId, unitId, 10, 0.6);
+            this.combatResolver.applyDamage(unitId, reactionDamage, reactionAttackerId);
+        }
+
         console.log(`Unit ${unitId} moved to ${targetX}, ${targetY}`);
-        return lootedItemName;
+        return { loot: lootedItemName, reactionDamage, reactionAttackerId };
     }
 
-    performAttack(attackerId, targetId) {
+    performAttack(attackerId, targetId, damageMod = 1) {
         if (!this.combatResolver) return;
-        const dmg = this.combatResolver.calculateDamage(attackerId, targetId);
+
+        const ax = COMPONENT_TRANSFORM.x[attackerId];
+        const ay = COMPONENT_TRANSFORM.y[attackerId];
+        const tx = COMPONENT_TRANSFORM.x[targetId];
+        const ty = COMPONENT_TRANSFORM.y[targetId];
+        const dx = tx - ax;
+        const dy = ty - ay;
+
+        if (Math.abs(dx) > Math.abs(dy) && dx !== 0) COMPONENT_TRANSFORM.dir[attackerId] = dx > 0 ? 1 : 3;
+        else if (dy !== 0) COMPONENT_TRANSFORM.dir[attackerId] = dy > 0 ? 2 : 0;
+
+        const dmg = this.combatResolver.calculateDamage(attackerId, targetId, 10, damageMod);
         this.combatResolver.applyDamage(targetId, dmg, attackerId);
         return dmg;
     }

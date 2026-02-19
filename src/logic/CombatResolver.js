@@ -13,7 +13,7 @@ export class CombatResolver {
         this.calculator = new StatsCalculator();
     }
 
-    calculateDamage(attackerId, targetId, weaponPower = 10) {
+    calculateDamage(attackerId, targetId, weaponPower = 10, damageMod = 1) {
         // Retrieve weapon power from inventory if available and if attacker is the Hero (Unit 0 usually)
         // For Alpha, only Hero has inventory.
         if (attackerId === 0 && this.inventory) {
@@ -28,8 +28,48 @@ export class CombatResolver {
             limbs: COMPONENT_STATS.limbs[attackerId] || 0
         };
 
-        const damage = this.calculator.calculatePhysicalDamage(attackerStats, {}, weaponPower);
+
+        const positionalMod = this._getPositionalModifier(attackerId, targetId);
+        const heightMod = this._getHeightModifier(attackerId, targetId);
+
+        const damage = Math.max(1, Math.floor(this.calculator.calculatePhysicalDamage(attackerStats, {}, weaponPower) * positionalMod * heightMod * damageMod));
         return damage;
+    }
+
+    _getPositionalModifier(attackerId, targetId) {
+        const tx = COMPONENT_TRANSFORM.x[targetId];
+        const ty = COMPONENT_TRANSFORM.y[targetId];
+        const ax = COMPONENT_TRANSFORM.x[attackerId];
+        const ay = COMPONENT_TRANSFORM.y[attackerId];
+
+        const dx = ax - tx;
+        const dy = ay - ty;
+        let attackDir = 0;
+
+        if (Math.abs(dx) > Math.abs(dy)) attackDir = dx > 0 ? 3 : 1;
+        else attackDir = dy > 0 ? 0 : 2;
+
+        const facing = COMPONENT_TRANSFORM.dir[targetId] ?? 2;
+        const backDir = (facing + 2) % 4;
+        const leftDir = (facing + 3) % 4;
+        const rightDir = (facing + 1) % 4;
+
+        if (attackDir === backDir) return 1.5;
+        if (attackDir === leftDir || attackDir === rightDir) return 1.2;
+        return 0.9;
+    }
+
+
+    _getHeightModifier(attackerId, targetId) {
+        const attackerZ = COMPONENT_TRANSFORM.z[attackerId] || 0;
+        const targetZ = COMPONENT_TRANSFORM.z[targetId] || 0;
+        const delta = attackerZ - targetZ;
+
+        if (delta === 0) return 1;
+
+        const step = Math.min(3, Math.abs(delta)) * 0.1;
+        if (delta > 0) return 1 + step;
+        return Math.max(0.7, 1 - step);
     }
 
     applyDamage(targetId, amount, attackerId = -1) {
