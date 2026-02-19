@@ -1,11 +1,12 @@
-:root {
-    --color-bg: #0a0a0a;
+ :root {
+    --color-bg: #0d1019;
     --color-blood: #8a0303;
-    --color-bone: #e3DAC9;
-    --color-gold: #c5a059;
-    --color-ui-bg: rgba(20, 0, 0, 0.85);
+    --color-bone: #e3dac9;
+    --color-gold: #d4b77a;
+    --color-ui-bg: rgba(14, 22, 38, 0.82);
+    --color-ui-accent: #89a9d8;
 
-    --font-main: 'Courier New', Courier, monospace;
+    --font-main: 'Georgia', 'Times New Roman', serif;
 
     --z-index-canvas: 0;
     --z-index-ui: 10;

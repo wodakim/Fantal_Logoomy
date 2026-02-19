@@ -1,12 +1,23 @@
-import { ActionSystem } from '../logic/ActionSystem.js'; // To access check functions if needed, or we delegate to TM
-
 export class CombatOverlay {
     constructor(turnManager) {
         this.tm = turnManager;
         this.root = document.getElementById('ui-layer');
         this.menu = null;
-
-        this.tm.onTurnStart = (unitId) => this.showActionMenu(unitId);
+        this.turnPreview = document.createElement('div');
+        this.turnPreview.className = 'turn-preview glass-panel';
+        Object.assign(this.turnPreview.style, {
+            position: 'absolute',
+            top: '10px',
+            left: '10px',
+            minHeight: '48px',
+            minWidth: '210px',
+            padding: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            zIndex: 25
+        });
+        this.root.appendChild(this.turnPreview);
 
         this.onMoveClicked = null;
         this.onAttackClicked = null; // Standard Attack
@@ -15,6 +26,7 @@ export class CombatOverlay {
         this.onDevourClicked = null; // New: Cannibalize
 
         this.skillSystem = null; // To be linked
+        this.renderTurnPreview();
     }
 
     showActionMenu(unitId) {
@@ -90,6 +102,21 @@ export class CombatOverlay {
         }
 
         this.createButton('BACK', () => this.showActionMenu(unitId));
+    }
+
+    renderTurnPreview(activeUnitId = -1) {
+        const order = this.tm.getTurnPreview(5, 60);
+        const chips = order.map((id, idx) => {
+            const label = id === 0 ? 'HERO' : `EN${id}`;
+            const active = (idx === 0 && id === activeUnitId);
+            const color = id === 0 ? '#2ecc71' : '#e67e22';
+            return `<div style="min-width:44px; min-height:44px; border:1px solid ${color}; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; background:${active ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.35)'};">${label}</div>`;
+        });
+
+        this.turnPreview.innerHTML = `
+            <div style="font-size:10px; color:#c5a059; margin-right:4px;">NEXT</div>
+            ${chips.join('')}
+        `;
     }
 
     createButton(text, callback, bgColor = 'rgba(50, 0, 0, 0.9)') {

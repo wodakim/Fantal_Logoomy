@@ -46,7 +46,7 @@ export class SkillSystem {
         // Damage Skill
         if (skill.damage_mod) {
             // Use CombatResolver via ActionSystem
-            const baseDmg = this.actionSystem.performAttack(attackerId, targetId);
+            const baseDmg = this.actionSystem.performAttack(attackerId, targetId, skill.damage_mod);
             // Mod damage
             // Ideally performAttack should accept a multiplier.
             // Phase 14 simplified: just return baseDmg for now.

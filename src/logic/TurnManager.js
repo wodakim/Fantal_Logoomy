@@ -148,6 +148,43 @@ export class TurnManager {
         this.turnState.acted = true;
     }
 
+    getTurnPreview(maxUnits = 5, maxTicks = 50) {
+        const stats = COMPONENT_STATS;
+        const status = COMPONENT_STATUS;
+        const preview = [];
+        const ctBuffer = new Uint16Array(stats.ct.length);
+        ctBuffer.set(stats.ct);
+
+        for (let tick = 0; tick < maxTicks && preview.length < maxUnits; tick++) {
+            let bestId = -1;
+            let bestCt = -1;
+            let bestSpeed = -1;
+
+            for (let id = 0; id < this.em.activeMap.length; id++) {
+                if (this.em.activeMap[id] === 0) continue;
+                if ((status.flags[id] & STATUS_DEAD) !== 0) continue;
+
+                const speed = Math.max(1, stats.speed[id]);
+                ctBuffer[id] += speed;
+
+                if (ctBuffer[id] >= 100) {
+                    if (ctBuffer[id] > bestCt || (ctBuffer[id] === bestCt && speed > bestSpeed)) {
+                        bestId = id;
+                        bestCt = ctBuffer[id];
+                        bestSpeed = speed;
+                    }
+                }
+            }
+
+            if (bestId !== -1) {
+                preview.push(bestId);
+                ctBuffer[bestId] = 0;
+            }
+        }
+
+        return preview;
+    }
+
     // Helper for UI
     checkForNearbyCorpse(unitId) {
         const x = COMPONENT_TRANSFORM.x[unitId];
